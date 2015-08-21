@@ -138,3 +138,75 @@ function verify_tool_group {
 	fi
 	return 0
 }
+
+function install_benchmark {
+	local benchmark_name=$1
+	local benchmark_ver=$2
+	local func_name="install_benchmark"
+
+	if [ -z "$benchmark_name" ]; then
+		error_log "[$func_name] no benchmark_name was provided"
+		return 1
+	fi
+
+	if [ -z "$benchmark_ver" ]; then
+		error_log "[$func_name] no benchmark_ver was provided"
+		return 1
+	fi
+
+	if check_install_rpm $benchmark_name $benchmark_ver; then
+		debug_log "[$func_name]$benchmark is installed"
+	else
+		error_log "[$func_name]$benchmark installation failed, exiting"
+		return 1
+	fi
+}
+
+# ensure the benchmark is installed on these systems
+function install_benchmark_systems() {
+	local systems=$1
+	local benchmark_name=$2
+	local benchmark_ver=$3
+	local rc=0
+	local func_name="install_benchnmark_systems"
+
+	if [ -z "$systems" ]; then
+		error_log "$func_name: no systems were provided"
+		return 1
+	fi
+
+	if [ -z "$benchmark_name" ]; then
+		error_log "$func_name: no benchmark_name was provided"
+		return 1
+	fi
+
+	if [ -z "$benchmark_ver" ]; then
+		error_log "$func_name: no benchmark_ver was provided"
+		return 1
+	fi
+
+	systems=`echo $systems | sed -e s/,/" "/g`
+	systems=($systems)
+
+	debug_log "$func_name: installing $benchmark_name on:\n${systems[@]}"
+
+	local length=${#systems[@]}
+	local rc_dir=$(mktemp -d)
+	for (( i=0; i<${length}; i++ )); do
+                debug_log "[$func_name] $benchmark_script --install on ${systems[$i]}"
+		install_rc[$i]=0
+		( ssh $ssh_opts ${systems[$i]} ". ${pbench_install_dir}/base; install_benchmark $benchmark_name $benchmark_ver" >$rc_dir/$i-output.txt 2>&1 ; echo "$?" >"$rc_dir/$i" ) &
+        done
+	wait
+
+	for (( i=0; i<${length}; i++ )); do
+		install_rc="`cat $rc_dir/$i`"
+		((rc+=$install_rc))
+		if [ $install_rc -ne 0 ]; then
+			error_msg=`cat "$rc_dir/$i-output.txt"`
+			error_log "[$func_name] installation of $benchmark_name on ${systems[$i]} failed: $error_msg"
+		fi
+	done
+	/bin/rm -rf "$rc_dir"
+	return $rc
+}
