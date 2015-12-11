@@ -2,7 +2,7 @@
 #
 # Author: Andrew Theurer
 # This script will process csv result files from each benchmark iteration, generating
-# a summary in txt, csv, html, and json.
+# a summary of all iterations in txt, csv, html, and json.
 # 
 # usage:
 # $script <benchmark-name> <original_command> <benchmark-results-directory>
@@ -155,7 +155,7 @@ my $html_file = $benchmark_run_dir . "/summary-result.html";
 open(TXT, ">$txt_file") || die "$script: could not open file $txt_file: $!\n";
 open(CSV, ">$csv_file") || die "$script: could not open file $csv_file: $!\n";
 open(HTML, ">$html_file") || die "$script: could not open file $html_file: $!\n";
-print HTML "<!DOCTYPE html>\n<html>\n<head>\n<title>HTML Tables</title>\n</head>\n<body>\n<pre>\n<table cellpadding=\"6\" border=\"1\" style=\"border: 1pt solid #000000; border-Collapse: collapse\">\n";
+print HTML "<!DOCTYPE html>\n<html>\n<head>\n<title>HTML Tables</title>\n</head>\n<body>\n\n<table cellpadding=\"6\" border=\"1\" style=\"border: 1pt solid #000000; border-Collapse: collapse\">\n";
 
 $iteration_name = $iterations_by_num{"1"};
 my @all_metric_types = reverse sort keys %all_metric_names_by_type;
@@ -276,7 +276,11 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 			my $csv_label_section = "";
 			foreach $metric_label ( sort keys %all_metric_labels ) {
 				if ( defined ($metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}) ) {
-					printf HTML "<td><div align=\"right\">$metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}</dev></td>";
+					if ( $metric_label eq "closest-sample" ) { # embed a link to the closest sample
+						printf HTML "<td><div align=\"right\"><a href=\"./$iteration_num-$iteration_name/sample$metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}\">$metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}</a></dev></td>";
+					} else {
+						printf HTML "<td><div align=\"right\">$metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}</dev></td>";
+					}
 					$length = scalar split("", $metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label});
 					if ( $length + $padding > $spacing{$metric_type}{$metric_name}{$metric_label} ) {
 						printf "warning: length of [%s] (%d) is longer than spacing for [%s] header (%s)\n", $metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}, $length, $metric_label, $spacing{$metric_type}{$metric_name}{$metric_label};
@@ -314,7 +318,7 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 }
 printf TXT "\n";
 printf CSV "\n";
-printf HTML "\n</table>\n</pre>\n</body>\n</html>\n";
+printf HTML "\n</table>\n\n</body>\n</html>\n";
 close(TXT);
 close(CSV);
 close(HTML);
