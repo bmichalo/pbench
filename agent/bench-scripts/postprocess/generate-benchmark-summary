@@ -269,7 +269,6 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 			my $label_section;
 			my $csv_label_section = "";
 			foreach $metric_label ( sort keys %all_metric_labels ) {
-				print "metric_label: [$metric_label]\n";
 				if ( defined ($metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}) ) {
 					$length = scalar split("", $metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label});
 					if ( $length + $padding > $spacing{$metric_type}{$metric_name}{$metric_label} ) {
