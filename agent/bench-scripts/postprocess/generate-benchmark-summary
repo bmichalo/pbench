@@ -155,36 +155,41 @@ my $html_file = $benchmark_run_dir . "/summary-result.html";
 open(TXT, ">$txt_file") || die "$script: could not open file $txt_file: $!\n";
 open(CSV, ">$csv_file") || die "$script: could not open file $csv_file: $!\n";
 open(HTML, ">$html_file") || die "$script: could not open file $html_file: $!\n";
+print HTML "<!DOCTYPE html>\n<html>\n<head>\n<title>HTML Tables</title>\n</head>\n<body>\n<pre>\n<table cellpadding=\"6\" border=\"1\" style=\"border: 1pt solid #000000; border-Collapse: collapse\">\n";
+
 $iteration_name = $iterations_by_num{"1"};
 my @all_metric_types = reverse sort keys %all_metric_names_by_type;
 
 # print the headers for metric types (Throuhgput, Resource, Efficiency)
 printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
-printf HTML "<pre>\n%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
+printf HTML "<tr><td>%s</td><td>%s</td>", "", "";
 foreach $metric_type (@all_metric_types) {
+	my $colspan = (scalar keys %all_metric_labels) * ( scalar keys %{ $all_metric_names_by_type{$metric_type} } );
 	$length = scalar split("", $metric_type);
 	if ( $length + $padding > $spacing{$metric_type}{header} ) {
 		printf "warning: length of $metric_type (%d) is longer than spacing for $metric_type header (%s)\n", $length, $spacing{$metric_type}{header};
 	}
 	printf TXT "%$spacing{$metric_type}{header}s|", $metric_type;
-	printf HTML "%$spacing{$metric_type}{header}s|", $metric_type;
+	printf HTML "<th colspan=$colspan><div align=\"center\">%s</div></th>", "$metric_type";
 }
 printf TXT "\n";
-printf HTML "\n";
+printf HTML "</tr>\n";
 
 # print the headers for individual metrics in each metric type (aggregate_Gb_sec)
 # [TXT, HTML] first some spacing for interation num and name columns
 printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
-printf HTML "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
+printf HTML "<tr><td>%s</td><td>%s</td>", "", "";
 # [CSV] first two headers for interation num & name
 printf CSV "%s,%s,", "iteration-number", "iteration-name";
-# next print the headers for individual metrics
+# then print the headers for individual metrics
 foreach $metric_type (@all_metric_types) {
 	my $metric_section;
 	my $csv_metric_section;
+	my $colspan = scalar keys %all_metric_labels;
 	foreach $metric_name (sort keys %{ $all_metric_names_by_type{$metric_type} } ) {
 		$metric_section = $metric_section . sprintf "%$spacing{$metric_type}{$metric_name}{header}s", $metric_name;
 		$csv_metric_section = $csv_metric_section . sprintf "%s,", $metric_name;
+		printf HTML "<td colspan=$colspan><div align=\"center\">%s</div></td>", $metric_name;
 	}
 	$length = scalar split("", $metric_section);
 	if ( $length + $padding > $spacing{$metric_type}{header} ) {
@@ -192,11 +197,11 @@ foreach $metric_type (@all_metric_types) {
 	}
 	printf TXT "%$spacing{$metric_type}{header}s|", $metric_section;
 	printf CSV "%s", $csv_metric_section;
-	printf HTML "%$spacing{$metric_type}{header}s|", $metric_section;
+	#printf HTML "<td>%s</td>", $metric_section;
 }
 printf TXT "\n";
 printf CSV "\n";
-printf HTML "\n";
+printf HTML "<tr>\n";
 
 # print a horizontal separator 
 printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
@@ -216,26 +221,27 @@ foreach $metric_type (@all_metric_types) {
 		printf "warning: length of $metric_section (%d) is longer than spacing for $metric_type header (%s)\n", $length, $spacing{$metric_type}{header};
 	}
 	printf TXT "%$spacing{$metric_type}{header}s+", $metric_section;
-	printf HTML "%$spacing{$metric_type}{header}s+", $metric_section;
+	#printf HTML "%$spacing{$metric_type}{header}s+", $metric_section;
 }
 printf TXT "\n";
-printf HTML "\n";
+#printf HTML "\n";
 
 # print the headers for the metric-labels (average, stddev, closest-sample)
 $iteration_num = 1;
 $iteration_name = $iterations_by_num{$iteration_num};
 printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
-printf HTML "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
+printf HTML "<tr><td>%s</td><td>%s</td>", "", "";
 foreach $metric_type (@all_metric_types) {
 	my $metric_section;
 	foreach $metric_name (sort keys %{ $all_metric_names_by_type{$metric_type} } ) {
 		my $label_section;
 		foreach $metric_label ( sort keys %all_metric_labels ) {
-			if ( defined ($metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}) ) {
+			#if ( defined ($metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}) ) {
 				$label_section = $label_section . sprintf "%$spacing{$metric_type}{$metric_name}{$metric_label}s", "$metric_label";
-			} else {
-				$label_section = $label_section . sprintf "%$spacing{$metric_type}{$metric_name}{$metric_label}s", "$metric_label";
-			}
+			#} else {
+			#	$label_section = $label_section . sprintf "%$spacing{$metric_type}{$metric_name}{$metric_label}s", "$metric_label";
+			#}
+			printf HTML "<td>%s</td>", $metric_label;
 		}
 		$length = scalar split("", $label_section);
 		if ( $length + $padding > $spacing{$metric_type}{$metric_name}{header} ) {
@@ -248,10 +254,10 @@ foreach $metric_type (@all_metric_types) {
 		printf "warning: length of $metric_section (%d) is longer than spacing for $metric_type header (%s)\n", $length, $spacing{$metric_type}{header};
 	}
 	printf TXT "%$spacing{$metric_type}{header}s|", $metric_section;
-	printf HTML "%$spacing{$metric_type}{header}s|", $metric_section;
+	#printf HTML "<td>%s</td>", $metric_section;
 }
 printf TXT "\n";
-printf HTML "\n";
+printf HTML "</tr>\n";
 
 # for all iterations, print the *values* for the metric labels (average, stddev, closest-sample)
 foreach $iteration_num (sort keys %iterations_by_num) {
@@ -259,7 +265,7 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 	printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", $iteration_num, $iteration_name;
 	printf CSV "%s,%s,", $iteration_num, $iteration_name;
 	my $href_spacing = $spacing{iter_name} - (scalar split("", $iteration_name));
-	printf HTML "%$spacing{iter_num}s%${href_spacing}s%s", $iteration_num, "", "<a href=./$iteration_num-$iteration_name>$iteration_name</a>";
+	printf HTML "<tr><td>%s</td><td>%s</td>", $iteration_num, "<a href=./$iteration_num-$iteration_name>$iteration_name</a>";
 	#printf HTML "%$spacing{iter_num}s%$spacing{iter_name}s", $iteration_num, "<a href=./$iteration_num-$iteration_name>$iteration_name</a>";
 	#printf HTML "%$spacing{iter_num}s<a href=./%s-%s>%$spacing{iter_name}s</a>", $iteration_num, $iteration_num, $iteration_name, $iteration_name;
 	foreach $metric_type (@all_metric_types) {
@@ -270,6 +276,7 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 			my $csv_label_section = "";
 			foreach $metric_label ( sort keys %all_metric_labels ) {
 				if ( defined ($metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}) ) {
+					printf HTML "<td><div align=\"right\">$metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}</dev></td>";
 					$length = scalar split("", $metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label});
 					if ( $length + $padding > $spacing{$metric_type}{$metric_name}{$metric_label} ) {
 						printf "warning: length of [%s] (%d) is longer than spacing for [%s] header (%s)\n", $metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}, $length, $metric_label, $spacing{$metric_type}{$metric_name}{$metric_label};
@@ -279,6 +286,7 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 						$csv_label_section = sprintf "%s,", "$metrics{$iteration_name}{$metric_type}{$metric_name}{$metric_label}";
 					}
 				} else {
+					printf HTML "<td></td>";
 					$label_section = $label_section . sprintf "%$spacing{$metric_type}{$metric_name}{$metric_label}s", "";
 					if ( $metric_label eq "average" ) {
 						$csv_label_section = $csv_label_section = sprintf "%s,", "";
@@ -298,15 +306,15 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 		}
 		printf TXT "%$spacing{$metric_type}{header}s|", $metric_section;
 		printf CSV "%s", $csv_metric_section;
-		printf HTML "%$spacing{$metric_type}{header}s|", $metric_section;
+		#printf HTML "%$spacing{$metric_type}{header}s|", $metric_section;
 	}
 	printf TXT "\n";
 	printf CSV "\n";
-	printf HTML "\n";
+	printf HTML "</tr>\n";
 }
 printf TXT "\n";
 printf CSV "\n";
-printf HTML "\n</pre>\n";
+printf HTML "\n</table>\n</pre>\n</body>\n</html>\n";
 close(TXT);
 close(CSV);
 close(HTML);
