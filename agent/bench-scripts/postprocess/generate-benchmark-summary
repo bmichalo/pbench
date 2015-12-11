@@ -258,7 +258,10 @@ foreach $iteration_num (sort keys %iterations_by_num) {
 	$iteration_name = $iterations_by_num{$iteration_num};
 	printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", $iteration_num, $iteration_name;
 	printf CSV "%s,%s,", $iteration_num, $iteration_name;
-	printf HTML "%$spacing{iter_num}s%$spacing{iter_name}s", $iteration_num, $iteration_name;
+	my $href_spacing = $spacing{iter_name} - (scalar split("", $iteration_name));
+	printf HTML "%$spacing{iter_num}s%${href_spacing}s%s", $iteration_num, "", "<a href=./$iteration_num-$iteration_name>$iteration_name</a>";
+	#printf HTML "%$spacing{iter_num}s%$spacing{iter_name}s", $iteration_num, "<a href=./$iteration_num-$iteration_name>$iteration_name</a>";
+	#printf HTML "%$spacing{iter_num}s<a href=./%s-%s>%$spacing{iter_name}s</a>", $iteration_num, $iteration_num, $iteration_name, $iteration_name;
 	foreach $metric_type (@all_metric_types) {
 		my $metric_section;
 		my $csv_metric_section = "";
