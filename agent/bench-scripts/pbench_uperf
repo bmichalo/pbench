@@ -56,7 +56,8 @@ postprocess_only=n
 log_response_times=n
 kvm_host=""
 start_iteration_num=1
-keep_failed_tool_data="y"
+tar_nonref_data="y"
+keep_failed_tool_data="n"
 orig_cmd="$*"
 tool_group=default
 tool_label_pattern="uperf-"
@@ -485,9 +486,9 @@ collect-sysinfo --group=$tool_group --dir=$benchmark_run_dir beg
 for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 	for test_type in `echo $test_types | sed -e s/,/" "/g`; do
 		if [ "$test_type" == "rr" ]; then
-			primary_metric="Throughput--aggregate_trans_sec"
+			primary_metric="Throughput--trans_sec-aggregate"
 		else
-			primary_metric="Throughput--aggregate_Gb_sec"
+			primary_metric="Throughput--Gb_sec-aggregate"
 		fi
 		for message_size in `echo $message_sizes | sed -e s/,/" "/g`; do
 			for instance in `echo $instances | sed -e s/,/" "/g`; do
@@ -640,7 +641,7 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 							$script_path/postprocess/$benchmark-postprocess $benchmark_results_dir $iteration "$tool_label_pattern" "$tool_group"
 							mv $benchmark_results_dir/uperf-average.txt $benchmark_results_dir/result.txt
 						done
-						process_benchmark_iteration_samples "$iteration_dir" "$nr_samples" "$maxstddevpct" "$primary_metric" "$failures" "$max_failures"
+						process_benchmark_iteration_samples "$iteration_dir" "$nr_samples" "$maxstddevpct" "$primary_metric" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
 						fail=$?
 						if [ $fail -eq 1 ]; then
 							((failures++))
