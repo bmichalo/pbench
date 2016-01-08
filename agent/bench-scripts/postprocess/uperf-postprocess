@@ -24,6 +24,14 @@ no lib ".";
 use GenData qw(gen_data);
 use BenchPostprocess qw(get_cpubusy_series calc_ratio_series calc_sum_series);
 use File::Basename;
+use Data::Dumper;
+use List::Util('sum');
+use JSON;
+
+sub mean {
+    return sum(@_)/@_;
+}
+
 my $script = basename($0);
 my $dir = $ARGV[0];
 my $test = $ARGV[1];
@@ -39,10 +47,98 @@ my %avg;
 my %total;
 
 if ($test_type =~ /_rr/) {
-	$uperf_primary_metric="trans-sec";
+	$uperf_primary_metric="trans_sec";
 } else {
-	$uperf_primary_metric="Gb-sec";
+	$uperf_primary_metric="Gb_sec";
 }
+
+# "Gb-sec" : [
+# {
+# "hostname": "perf104.perf.lab.eng.bos.redhat.com",
+# "role": "client",
+# "samples" : {1407890808: 7.75, 1407890809: 7.77}
+# "average" : "7.76"
+# },
+# {
+# "hostname": "perf103.perf.lab.eng.bos.redhat.com",
+# "role": "client",
+# "stddev" : "0.6402",
+# "closest-sample" : "1",
+# "average" : "4.0996"
+# }
+# ],
+
+# %workload
+#		   {Throughput|Latency|Resource|Efficiency}
+#		   {Throughput}[Gb_sec, 
+
+my %workload;  # root hash for all data, contains hash refs to
+		# %throughput, %latency, %resource, %efficiency
+my %resource;	# a hash of resource-type:array-of-resource-values,
+
+my @cpu_busy;	# each array element contains a hash with
+		# hostname: hostname or IP
+		# role: client, server, host, kvm-host, container-host, etc.
+		# timeseries: a hash of timestamp:value key-pairs
+my %efficiency;
+my %latency;    # a hash of throughput-type:array-of-throughput-values,
+		# for example $throughput{Gb_sec[0..1]
+my @usec;	# each array element contains a hash with:
+	    	# hostname: <hostname or IP>
+	    	# role: <client or server> <-uperf happens to always be client
+	    	# timeseries: a hash of timstamp:value elements
+
+my %throughput; # a hash of throughput-type:array-of-throughput-values,
+		# for example $throughput{Gb_sec[0..1]
+my @Gb_sec;	# each array element contains a hash with:
+	    	# hostname: <hostname or IP>
+	    	# role: <client or server> <-uperf happens to always be client
+	    	# timeseries: a hash of timstamp:value key-pairs
+my @trans_sec;	# each array element contains a hash with:
+	    	# hostname: <hostname or IP>
+	    	# role: <client or server> <-uperf happens to always be client
+	    	# timeseries: a hash of timstamp:value key-pairs
+
+
+# Get the tool data
+# Define a set of tool directories which we want to use to report CPU and efficiency metrics
+# Search for tool directories which match the $tool_label_pattern
+my %tool_ids;
+my $tool_group_dir = "$dir/tools-$tool_group";
+if (opendir(my $dh, $tool_group_dir)) {
+	my $this_tool_dir;
+	foreach $this_tool_dir (readdir($dh)) {
+		if ($this_tool_dir =~ /^$tool_label_pattern/) {
+			my $tool_dir_id = $this_tool_dir;
+			$tool_dir_id =~ s/^$tool_pattern_label//;
+			$this_tool_dir = $tool_group_dir . "/" . $this_tool_dir;
+			$tool_ids{$this_tool_dir} = $tool_dir_id;
+		}
+	}
+} else {
+	print "$script: could not find any directories in $tool_group_dir which matched $tool_label_pattern\n";
+}
+foreach $this_tool_dir (keys %tool_ids) {
+	my $res;
+	my $this_tool_id = $tool_ids{$this_tool_dir};
+	my $role;
+	my $url;
+	my $hostname;
+	($role, $hostname) = split(/:/,$this_tool_id);
+	my %cpubusy_samples;
+	$res = get_cpubusy_series($this_tool_dir, \%cpubusy_samples );
+	if ( (%cpubusy_samples) ) {
+		my %this_cpubusy_dataset;
+		my $description = "Total busy CPU usage, averaged over N seconds, where 1.0 = 1 logical CPU";
+		my $mean = mean(values %cpubusy_samples);
+		%this_cpubusy_dataset = ( 'description' => $description, 'role' => $role, 'hostname' => $hostname, 'mean' => $mean, 'timeseries' => \%cpubusy_samples);
+		push(@cpu_busy, \%this_cpubusy_dataset);
+	}
+}
+if ( @cpu_busy ) {
+	$resource{'cpu_busy'} = \@cpu_busy;
+}
+
 
 # Load the data from uperf output and create throughput metrics
 # There can be several result files, once for each server involved in this test
@@ -50,16 +146,32 @@ if ($test_type =~ /_rr/) {
 #print "going to read dir: [$dir]\n";
 opendir(my $dh, $dir) || die "$script: could not open directory $dir: $!\n";
 my $nr_result_files=0;
+
 foreach $result_file ( readdir($dh) ) {
+	# for each result file, build this:
+	# # {
+	# # "hostname": "perf104", <-where this workload was running
+	# # "role": "client", <-where this information came from: workload client or server
+	# # "samples" : {1407890808: 7.75, 1407890809: 7.77}  <-time series data from workload output
+	# # "average" : "7.76" <-the average of the time series data
+	# # },
 	# the server ip should be in the result file name, like "result-192.168.1.1.txt"
 	if ( $result_file =~ /^result-(.+).txt$/) {
-		$server_ip = $1;
-		$this_nr_bytes_label = "server_" . $server_ip . "_bytes"; # a number of bytes (not a througput metric)
-		$this_nr_ops_label = "server_" . $server_ip . "_ops"; # a number of operations
-		$this_tput_label = "server_" . $server_ip . "_Gb_sec"; # a number of bytes over time
-		$this_opssec_label = "server_" . $server_ip . "_ops_sec"; # a number of operations over time
-		$this_transsec_label = "server_" . $server_ip . "_trans_sec"; # a number of transactions over time
-		$this_lat_label = "server_" . $server_ip . "_usec"; # a time period
+		my $url = $1;
+		my $hostname;
+		my $port;
+		($hostname, $port) = split(/:/, $url);
+		my $role = "client";
+		my $average;
+		my %throughput_samples;
+		my %latency_samples;
+
+		$this_nr_bytes_label = "bytes-server-" . $server_ip; # a number of bytes (not a througput metric)
+		$this_nr_ops_label = "ops-server-" . $server_ip; # a number of operations
+		$this_tput_label = "Gb_sec-server_" . $server_ip; # a number of bytes over time
+		$this_opssec_label = "ops_sec-server_" . $server_ip; # a number of operations over time
+		$this_transsec_label = "trans_sec-server_" . $server_ip; # a number of transactions over time
+		$this_lat_label = "usec-server_" . $server_ip; # a time period
 		open(IN_FILE, "$dir/$result_file") || die "$script: could not open file $dir/$result_file: $!\n";
 		$prev_timestamp_ms = 0;
 		while (<IN_FILE>) {
@@ -91,12 +203,15 @@ foreach $result_file ( readdir($dh) ) {
 						$trans_sec = $ops_sec /2;
 						# for request-response, 1 transaction is two ops, a write and a read.
 						$uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{$timestamp_ms} = $ops_sec /2;
+						$throughput_samples{$timestamp_ms} = $ops_sec /2;
 						# the latency is the full round trip for 1 transaction, which is also = ($instances / trans_sec)
 						# if --log-response-times in pbench_uperf is used, the write and read latency can be computed (later).
 						$uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{$timestamp_ms} = $instances /$trans_sec *1000000;
+						$latency_samples{$timestamp_ms} = $instances /$trans_sec *1000000;
 					} else {
 						$bytes_sec = $nr_bytes_diff /$timestamp_s_diff;
 						$uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{$timestamp_ms} = $nr_bytes_diff *8 /1000000000 /$timestamp_s_diff;
+						$throughput_samples{$timestamp_ms} = $nr_bytes_diff *8 /1000000000 /$timestamp_s_diff;
 					}
 				}
 				$prev_timestamp_ms = $timestamp_ms;
@@ -104,22 +219,45 @@ foreach $result_file ( readdir($dh) ) {
 		}
 		$nr_result_files++;
 		close(IN_FILE);
-		# remove the leading and trailing 5 rate samples as they can be inaccurate
-		if ($test_type =~ /_rr/) {
-			my @this_rate_timestamps = (sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label} });
-			for (my $i=0; $i<5; $i++) {
-				delete $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{shift(@this_rate_timestamps)};
-				delete $uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{shift(@this_rate_timestamps)};
-				delete $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{pop(@this_rate_timestamps)};
-				delete $uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{pop(@this_rate_timestamps)};
-			}
-		} else {
-			my @this_rate_timestamps = (sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label} });
-			for (my $i=0; $i<=4; $i++) {
-				delete $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{shift(@this_rate_timestamps)};
-				delete $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{pop(@this_rate_timestamps)};
+		if ( (%latency_samples) ) {
+			my %this_lat_dataset;
+			my $description = "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 messgae, over a 1 second window";
+			my $mean = mean(values %latency_samples);
+			%this_lat_dataset = ( 'description' => $description, 'role' => $role, 'url' => $url, 'hostname' => $hostname, 'port' => $port, 'mean' => $mean, 'timeseries' => \%latency_samples);
+			if ($test_type =~ /_rr/) {
+				push(@usec, \%this_lat_dataset);
+			} 
+		}
+		if ( (%throughput_samples) ) {
+			my %this_tput_dataset;
+			my $mean = mean(values %throughput_samples);
+			if ($test_type =~ /_rr/) {
+				my $description = "Number of transactions sent by client for a period of 1 second";
+				%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'url' => $url, 'hostname' => $hostname, 'port' => $port, 'mean' => $mean, 'timeseries' => \%throughput_samples);
+				push(@trans_sec, \%this_tput_dataset);
+			} else {
+				my $description = "Number of gigabits sent by client for a period of 1 second";
+				%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'url' => $url, 'hostname' => $hostname, 'port' => $port, 'mean' => $mean, 'timeseries' => \%throughput_samples);
+				push(@Gb_sec, \%this_tput_dataset);
 			}
 		}
+		
+		# remove the leading and trailing 5 rate samples as they can be inaccurate
+		##if ($test_type =~ /_rr/) {
+			##my @this_rate_timestamps = (sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label} });
+			##for (my $i=0; $i<5; $i++) {
+				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{shift(@this_rate_timestamps)};
+				##delete $uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{shift(@this_rate_timestamps)};
+				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{pop(@this_rate_timestamps)};
+				##delete $uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{pop(@this_rate_timestamps)};
+			##}
+		##} else {
+			##my @this_rate_timestamps = (sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label} });
+			##for (my $i=0; $i<=4; $i++) {
+				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{shift(@this_rate_timestamps)};
+				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{pop(@this_rate_timestamps)};
+			##}
+		##}
 	}
 }
 closedir $dh;
@@ -128,24 +266,39 @@ if ($nr_result_files == 0) {
 	exit;
 }
 
-# Define a set of tool directories which we want to use to report CPU and efficiency metrics
-# Search for tool directories which match the $tool_label_pattern
-my %tool_ids;
-my $tool_group_dir = "$dir/tools-$tool_group";
-if (opendir(my $dh, $tool_group_dir)) {
-	my $this_tool_dir;
-	foreach $this_tool_dir (readdir($dh)) {
-		if ($this_tool_dir =~ /^$tool_label_pattern/) {
-			my $tool_dir_id = $this_tool_dir;
-			$tool_dir_id =~ s/^$tool_pattern_label//;
-			$this_tool_dir = $tool_group_dir . "/" . $this_tool_dir;
-			$tool_ids{$this_tool_dir} = $tool_dir_id;
-		}
-	}
-} else {
-	print "$script: could not find any directories in $tool_group_dir which matched $tool_label_pattern\n";
+# Generate efficiency metrics (throughoput / resource)
+
+
+# construct what we have so far in a master workload hash
+if ( @Gb_sec ) {
+	$throughput{'Gb_sec'} = \@Gb_sec;
+}
+if ( @trans_sec ) {
+	$throughput{'trans_sec'} = \@trans_sec;
+}
+if ( @usec ) {
+	$latency{'usec'} = \@usec;
+}
+if ( %throughput ) {
+	$workload{'throughput'} = \%throughput;
+}
+if ( %latency ) {
+	$workload{'latency'} = \%latency;
+}
+if ( %resource ) {
+	$workload{'resource'} = \%resource;
 }
 
+print "\n\n\n\nworkload\n";
+print Dumper(\%workload);
+my $json_file = $dir . "/result.json";
+my $json_text   = to_json( \%workload, { ascii => 1, pretty => 1 } );
+open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
+print JSON $json_text;
+close(JSON);
+
+
+sub old_crap_a {
 # Note that if there are multiple result files (multiple servers involved), we then do not yet have a throughput metric for the sum of all those tests
 # In order to get that, we have to go sum all of the data from the server results.
 if ($test_type =~ /_rr/) {
@@ -154,11 +307,11 @@ if ($test_type =~ /_rr/) {
 	@ref_timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$per_server_results[0]} } );
 	# our new hash starts off with 0's
 	foreach $timestamp_ms (@ref_timestamps) {
-		$uperf_rate{"uperf"}{"Throughput"}{"aggregate_trans_sec"}{$timestamp_ms} = 0;
+		$uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"}{$timestamp_ms} = 0;
 	}
 	# And now we add the values from each per server result to that hash one at a time
 	foreach $per_server_result (@per_server_results) {
-		calc_sum_series(\%{$uperf_rate{"uperf"}{"Throughput"}{$per_server_result}}, \%{$uperf_rate{"uperf"}{"Throughput"}{"aggregate_trans_sec"}});
+		calc_sum_series(\%{$uperf_rate{"uperf"}{"Throughput"}{$per_server_result}}, \%{$uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"}});
 	}
 
 	# calculate the average latency
@@ -179,7 +332,7 @@ if ($test_type =~ /_rr/) {
 		}
 	}
 	# At the same time, generate an effiicency (transactions/CPU) series for both the client and server CPU data
-	@timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{"aggregate_trans_sec"} });
+	@timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"} });
 	foreach $this_tool_dir (keys %tool_ids) {
 		my $res;
 		my $this_tool_id = $tool_ids{$this_tool_dir};
@@ -188,7 +341,7 @@ if ($test_type =~ /_rr/) {
 		my $this_eff_label = "trans-sec/" . $this_cpu_label;
 		$res = get_cpubusy_series($this_tool_dir, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, $timestamps[0], $timestamps[-1]);
 		if ($res == 0) {
-			calc_ratio_series(\%{ $uperf_rate{"uperf"}{"Throughput"}{"aggregate_trans_sec"} }, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, \%{ $uperf_rate{"uperf"}{"Efficiency"}{$this_eff_label} });
+			calc_ratio_series(\%{ $uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"} }, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, \%{ $uperf_rate{"uperf"}{"Efficiency"}{$this_eff_label} });
 		}
 	}
 } else { # throughoput tests
@@ -197,23 +350,23 @@ if ($test_type =~ /_rr/) {
 	@ref_timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$per_server_results[0]} } );
 	# our new hash starts off with 0's
 	foreach $timestamp_ms (@ref_timestamps) {
-		$uperf_rate{"uperf"}{"Throughput"}{"aggregate_Gb_sec"}{$timestamp_ms} = 0;
+		$uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"}{$timestamp_ms} = 0;
 	}
 	# And now we add the values from each per server result to that hash one at a time
 	foreach $per_server_result (@per_server_results) {
-		calc_sum_series(\%{$uperf_rate{"uperf"}{"Throughput"}{$per_server_result}}, \%{$uperf_rate{"uperf"}{"Throughput"}{"aggregate_Gb_sec"}});
+		calc_sum_series(\%{$uperf_rate{"uperf"}{"Throughput"}{$per_server_result}}, \%{$uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"}});
 	}
-	@timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{"aggregate_Gb_sec"} });
-	# At the same time, generate an effiicency (Gb-sec/CPU) series for both the client and server CPU data
+	@timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"} });
+	# At the same time, generate an effiicency (Gb_sec/CPU) series for both the client and server CPU data
 	foreach $this_tool_dir (keys %tool_ids) {
 		my $res;
 		my $this_tool_id = $tool_ids{$this_tool_dir};
 		$this_tool_id =~ s/^$tool_label_pattern//;
 		my $this_cpu_label = "CPU-" . $this_tool_id;
-		my $this_eff_label = "Gb-sec/" . $this_cpu_label;
+		my $this_eff_label = "Gb_sec/" . $this_cpu_label;
 		$res = get_cpubusy_series($this_tool_dir, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, $timestamps[0], $timestamps[-1]);
 		if ($res == 0) {
-			calc_ratio_series(\%{ $uperf_rate{"uperf"}{"Throughput"}{"aggregate_Gb_sec"} }, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, \%{ $uperf_rate{"uperf"}{"Efficiency"}{$this_eff_label} });
+			calc_ratio_series(\%{ $uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"} }, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, \%{ $uperf_rate{"uperf"}{"Efficiency"}{$this_eff_label} });
 		}
 	}
 }
@@ -320,3 +473,5 @@ my %graph_threshold;
 # combinatorial check of timestamps. uperf-postprocess is the
 # only script that makes use of it.
 gen_data(\%uperf_rate, \%graph_type, \%graph_threshold, $dir, 1);
+
+}
