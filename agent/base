@@ -146,6 +146,8 @@ function process_benchmark_iteration_samples {
 	local primary_metric=$4 # could be: Throughput_aggregate-Gb-sec (for uperf), Throughput_aggregate-IOPS (for fio), Throughput_aggregate-MB-sec (dbench), etc...
 	local num_failures=$5
 	local max_failures=$6
+	local tar_nonref_data=$7
+	local keep_failed_tool_data=$8
 	local iteration_samples=""
 	local keys=`cat $iteration_dir/sample1/result.txt  | awk -F= '{print $1}'`
 	local key_nr=0
