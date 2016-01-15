@@ -517,10 +517,11 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 									server_node=`echo "$server_nodes," | cut -d, -f$server_nr`
 									client_node=`echo "$client_nodes," | cut -d, -f$server_nr`
 									server_port=`echo "1000 * $server_nr + $server_base_port" | bc`
-									xml_file="$iteration_dir/uperf-config-$server:$server_port.xml"
-									benchmark_client_cmd_file="$iteration_dir/uperf-client-$server:$server_port.cmd"
-									result_file=$benchmark_results_dir/result-$server:$server_port.txt
-									benchmark_server_cmd_file="$iteration_dir/uperf-server-$server:$server_port.cmd"
+									uperf_identifier="client::$client-server::$server:$server_port"
+									xml_file="$iteration_dir/$uperf_identifier--test_config.xml"
+									benchmark_client_cmd_file="$iteration_dir/$uperf_identifier--client_start.sh"
+									benchmark_server_cmd_file="$iteration_dir/$uperf_identifier--server_start.sh"
+									result_file="$benchmark_results_dir/$uperf_identifier--client_output.txt"
 									gen_xml $test_type $message_size $protocol $instance $server >$xml_file
 
 									# construct the server command
@@ -538,7 +539,7 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 
 									# construct the client command
 									if [ "$log_response_times" == "y" ]; then
-										resp_opt=" -X $benchmark_results_dir/response-times-$server:$server_port.txt"
+										resp_opt=" -X $benchmark_results_dir/$uperf_identifier--response-times.txt"
 									fi
 									benchmark_client_cmd="profile=${protocol}_$test_type test=$test_type nthr=$instance size=$message_size h=$server proto=$protocol runtime=${runtime}s $benchmark_bin -m $xml_file -x -a -i 1 $resp_opt -P $server_port >$result_file 2>&1"
 									# adjust client command for NUMA binding
@@ -598,8 +599,13 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 										client="127.0.0.1"
 									fi
 									server_port=`echo "1000 * $server_nr + $server_base_port" | bc`
-									benchmark_client_cmd_file="$iteration_dir/uperf-client-$server:$server_port.cmd"
-									result_file=$benchmark_results_dir/result-$server:$server_port.txt
+									uperf_identifier="client::$client-server::$server:$server_port"
+									xml_file="$iteration_dir/$uperf_identifier--test_config.xml"
+									benchmark_client_cmd_file="$iteration_dir/$uperf_identifier--client_start.sh"
+									#benchmark_server_cmd_file="$iteration_dir/$uperf_identifier--server_start.sh"
+									result_file="$benchmark_results_dir/$uperf_identifier--client_output.txt"
+									#benchmark_client_cmd_file="$iteration_dir/uperf-client-$server:$server_port.cmd"
+									#result_file=$benchmark_results_dir/result-$server:$server_port.txt
 									debug_log "client[$client]${client_nodeinfo}protocol[$protocol]test[$test_type]instances[$instance]size[$message_size] <-> server[$server]${server_nodeinfo}"
 									echo "client[$client]${client_nodeinfo}protocol[$protocol]test[$test_type]instances[$instance]size[$message_size] <-> server[$server]${server_nodeinfo}"
 
@@ -621,11 +627,12 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 
 								server_nr=1
 								for server in `echo $servers | sed -e s/,/" "/g`; do
+									client=`echo $clients | cut -d, -f$server_nr`
 									server_port=`echo "1000 * $server_nr + $server_base_port" | bc`
+									uperf_identifier="client::$client-server::$server:$server_port"
 									stop_server $server $server_port 0
 									if [ ! -z "$clients" ]; then
-										client=`echo $clients | cut -d, -f$server_nr`
-										result_file=$benchmark_results_dir/result-$server:$server_port.txt
+										result_file="$benchmark_results_dir/$uperf_identifier--client_output.txt"
 										scp $ssh_opts $client:$result_file $result_file >/dev/null
 									fi
 									((server_nr++))
@@ -639,7 +646,7 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 								log "Not going to run uperf.  Only postprocesing existing data"
 							fi
 							$script_path/postprocess/$benchmark-postprocess $benchmark_results_dir $iteration "$tool_label_pattern" "$tool_group"
-							mv $benchmark_results_dir/uperf-average.txt $benchmark_results_dir/result.txt
+							# mv $benchmark_results_dir/uperf-average.txt $benchmark_results_dir/result.txt
 						done
 						process_benchmark_iteration_samples "$iteration_dir" "$nr_samples" "$maxstddevpct" "$primary_metric" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
 						fail=$?

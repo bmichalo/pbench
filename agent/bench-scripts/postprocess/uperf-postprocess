@@ -142,7 +142,7 @@ if ( @cpu_busy ) {
 
 # Load the data from uperf output and create throughput metrics
 # There can be several result files, once for each server involved in this test
-# These are organized by server IP.
+# These are organized by server IP:port.
 #print "going to read dir: [$dir]\n";
 opendir(my $dh, $dir) || die "$script: could not open directory $dir: $!\n";
 my $nr_result_files=0;
@@ -156,22 +156,22 @@ foreach $result_file ( readdir($dh) ) {
 	# # "average" : "7.76" <-the average of the time series data
 	# # },
 	# the server ip should be in the result file name, like "result-192.168.1.1.txt"
-	if ( $result_file =~ /^result-(.+).txt$/) {
-		my $url = $1;
-		my $hostname;
-		my $port;
-		($hostname, $port) = split(/:/, $url);
+	if ( $result_file =~ /^client::(.+)-server::(.+):(\d+)--client_output\.txt$/) {
+		my $client_hostname = $1;
+		my $server_hostname = $2;
+		my $server_port = $3;
+		my $identifier = "client::" . $client_hostname . "-server::" . $server_hostname . ":" . $server_port;
 		my $role = "client";
 		my $average;
 		my %throughput_samples;
 		my %latency_samples;
 
-		$this_nr_bytes_label = "bytes-server-" . $server_ip; # a number of bytes (not a througput metric)
-		$this_nr_ops_label = "ops-server-" . $server_ip; # a number of operations
-		$this_tput_label = "Gb_sec-server_" . $server_ip; # a number of bytes over time
-		$this_opssec_label = "ops_sec-server_" . $server_ip; # a number of operations over time
-		$this_transsec_label = "trans_sec-server_" . $server_ip; # a number of transactions over time
-		$this_lat_label = "usec-server_" . $server_ip; # a time period
+		$this_nr_bytes_label = "bytes-" . $identifier; # a number of bytes (not a througput metric)
+		$this_nr_ops_label = "ops-" . $identifier; # a number of operations
+		$this_tput_label = "Gb_sec-_" . $identifier; # a number of bytes over time
+		$this_opssec_label = "ops_sec-" . $identifier; # a number of operations over time
+		$this_transsec_label = "trans_sec-" . $identifier; # a number of transactions over time
+		$this_lat_label = "usec-" . $identifier; # a time period
 		open(IN_FILE, "$dir/$result_file") || die "$script: could not open file $dir/$result_file: $!\n";
 		$prev_timestamp_ms = 0;
 		while (<IN_FILE>) {
@@ -223,21 +223,22 @@ foreach $result_file ( readdir($dh) ) {
 			my %this_lat_dataset;
 			my $description = "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 messgae, over a 1 second window";
 			my $mean = mean(values %latency_samples);
-			%this_lat_dataset = ( 'description' => $description, 'role' => $role, 'url' => $url, 'hostname' => $hostname, 'port' => $port, 'mean' => $mean, 'timeseries' => \%latency_samples);
+			%this_lat_dataset = ( 'description' => $description, 'role' => $role, 'client_hostname' => $client_hostname, 'server_hostname' => $server_hostname, 'server_port' => $server_port, 'mean' => $mean, 'timeseries' => \%latency_samples);
 			if ($test_type =~ /_rr/) {
 				push(@usec, \%this_lat_dataset);
 			} 
 		}
 		if ( (%throughput_samples) ) {
 			my %this_tput_dataset;
-			my $mean = mean(values %throughput_samples);
 			if ($test_type =~ /_rr/) {
 				my $description = "Number of transactions sent by client for a period of 1 second";
-				%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'url' => $url, 'hostname' => $hostname, 'port' => $port, 'mean' => $mean, 'timeseries' => \%throughput_samples);
+				my $mean = mean(values %throughput_samples);
+				%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'client_hostname' => $client_hostname, 'server_hostname' => $server_hostname, 'server_port' => $server_port, 'mean' => $mean, 'timeseries' => \%throughput_samples);
 				push(@trans_sec, \%this_tput_dataset);
 			} else {
 				my $description = "Number of gigabits sent by client for a period of 1 second";
-				%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'url' => $url, 'hostname' => $hostname, 'port' => $port, 'mean' => $mean, 'timeseries' => \%throughput_samples);
+				my $mean = mean(values %latency_samples);
+				%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'client_hostname' => $client_hostname, 'server_hostname' => $server_hostname, 'server_port' => $server_port, 'mean' => $mean, 'timeseries' => \%latency_samples);
 				push(@Gb_sec, \%this_tput_dataset);
 			}
 		}
@@ -265,6 +266,89 @@ if ($nr_result_files == 0) {
 	print "$script: could not find any result files to process, exiting\n";
 	exit;
 }
+# Note that if there are multiple result files (multiple servers involved), we then do not yet have a throughput metric for the sum of all those tests
+# In order to get that, we have to go sum all of the data from the server results.
+if ($test_type =~ /_rr/) {
+	# we use the timestamps from this first server result to model our new hash with the summed data
+	#@per_server_results =  (keys %{ $uperf_rate{"uperf"}{"Throughput"} });
+	#@ref_timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$per_server_results[0]} } );
+	@ref_timestamps = ( sort {$a<=>$b} keys %{ $trans_sec[0]{'timeseries'} } );
+	my %throughput_samples;
+	# our new hash starts off with 0's
+	foreach $timestamp_ms (@ref_timestamps) {
+		#$uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"}{$timestamp_ms} = 0;
+		$throughput_samples{$timestamp_ms} = 0;
+	}
+	# And now we add the values from each per server result to that hash one at a time
+	#foreach $per_server_result (@per_server_results) {
+	foreach $per_server_dataset_ (@trans_sec) {
+		my %per_server_dataset = %{ $per_server_dataset_ };
+		calc_sum_series(\%{ $per_server_dataset{'timeseries'} }, \%throughput_samples);
+	}
+	my $description = "Number of transactions sent by all clients for a period of 1 second";
+	my $role = "aggregate";
+	my $mean = mean(values %throughput_samples);
+	%this_tput_dataset = ( 'description' => $description, 'role' => $role, 'mean' => $mean, 'timeseries' => \%throughput_samples);
+	push(@trans_sec, \%this_tput_dataset);
+
+	# calculate the average latency
+	#@per_server_results =  (keys %{ $uperf_rate{"uperf"}{"Latency"} });
+	#@ref_timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Latency"}{$per_server_results[0]} } );
+	#foreach $timestamp_ms (@ref_timestamps) {
+		#$uperf_rate{"uperf"}{"Latency"}{"average_usec"}{$timestamp_ms} = 0;
+	#}
+	#my $num_server_results = 0;
+	#foreach $per_server_result (@per_server_results) {
+		#calc_sum_series(\%{$uperf_rate{"uperf"}{"Latency"}{$per_server_result}}, \%{$uperf_rate{"uperf"}{"Latency"}{"average_usec"}});
+		#$num_server_results++;
+	#}
+	## divide by number of server latency results to get the average latency
+	#if ($num_server_results > 0) {
+		#foreach $timestamp_ms (keys %{ $uperf_rate{"uperf"}{"Latency"}{"average_usec"} } ) {
+			#$uperf_rate{"uperf"}{"Latency"}{"average_usec"}{$timestamp_ms} /= $num_server_results;
+		#}
+	#}
+	
+	# At the same time, generate an effiicency (transactions/CPU) series for both the client and server CPU data
+	#@timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"} });
+	#foreach $this_tool_dir (keys %tool_ids) {
+		#my $res;
+		#my $this_tool_id = $tool_ids{$this_tool_dir};
+		#$this_tool_id =~ s/^$tool_label_pattern//;
+		#my $this_cpu_label = "CPU-" . $this_tool_id;
+		#my $this_eff_label = "trans-sec/" . $this_cpu_label;
+		#$res = get_cpubusy_series($this_tool_dir, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, $timestamps[0], $timestamps[-1]);
+		#if ($res == 0) {
+			#calc_ratio_series(\%{ $uperf_rate{"uperf"}{"Throughput"}{"trans_sec-aggregate"} }, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, \%{ $uperf_rate{"uperf"}{"Efficiency"}{$this_eff_label} });
+		#}
+	#}
+} else { # throughoput tests
+	@per_server_results = (keys %{ $uperf_rate{"uperf"}{"Throughput"} });
+	# we use the timestamps from this first server result to model our new hash with the summed data
+	@ref_timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$per_server_results[0]} } );
+	# our new hash starts off with 0's
+	foreach $timestamp_ms (@ref_timestamps) {
+		$uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"}{$timestamp_ms} = 0;
+	}
+	# And now we add the values from each per server result to that hash one at a time
+	foreach $per_server_result (@per_server_results) {
+		calc_sum_series(\%{$uperf_rate{"uperf"}{"Throughput"}{$per_server_result}}, \%{$uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"}});
+	}
+	@timestamps = ( sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"} });
+
+	## At the same time, generate an effiicency (Gb_sec/CPU) series for both the client and server CPU data
+	#foreach $this_tool_dir (keys %tool_ids) {
+		#my $res;
+		#my $this_tool_id = $tool_ids{$this_tool_dir};
+		#$this_tool_id =~ s/^$tool_label_pattern//;
+		#my $this_cpu_label = "CPU-" . $this_tool_id;
+		#my $this_eff_label = "Gb_sec/" . $this_cpu_label;
+		#$res = get_cpubusy_series($this_tool_dir, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, $timestamps[0], $timestamps[-1]);
+		#if ($res == 0) {
+			#calc_ratio_series(\%{ $uperf_rate{"uperf"}{"Throughput"}{"Gb_sec-aggregate"} }, \%{ $uperf_rate{"uperf"}{"Resource"}{$this_cpu_label} }, \%{ $uperf_rate{"uperf"}{"Efficiency"}{$this_eff_label} });
+		#}
+	#}
+}
 
 # Generate efficiency metrics (throughoput / resource)
 
@@ -289,8 +373,8 @@ if ( %resource ) {
 	$workload{'resource'} = \%resource;
 }
 
-print "\n\n\n\nworkload\n";
-print Dumper(\%workload);
+#print "\n\n\n\nworkload\n";
+#print Dumper(\%workload);
 my $json_file = $dir . "/result.json";
 my $json_text   = to_json( \%workload, { ascii => 1, pretty => 1 } );
 open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
