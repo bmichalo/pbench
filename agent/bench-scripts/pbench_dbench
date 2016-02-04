@@ -19,10 +19,12 @@ pbench_bin="`cd ${script_path}/..; /bin/pwd`"
 . "$pbench_bin"/base
 
 benchmark="dbench"
+benchmark_package_name="pbench-$benchmark"
+benchmark_package_ver=4.00
+
 if [[ -z "$benchmark_bin" ]]; then
     benchmark_bin=/usr/local/bin/$benchmark
 fi
-ver=4.00
 
 # Every bench-script follows a similar sequence:
 # 1) process bench script arguments
@@ -55,10 +57,10 @@ thread_counts=`cat /proc/cpuinfo | grep processor | wc -l`
 client_nodes=""
 
 function install_dbench {
-	if check_install_rpm $benchmark $ver; then
-		debug_log "[$script_name]$benchmark is installed"
+	if check_install_rpm $benchmark_package_name $benchmark_package_ver; then
+		debug_log "[$script_name]$benchmark_package_name is installed"
 	else
-		error_log "[$script_name]$benchmark installation failed, exiting"
+		error_log "[$script_name]$benchmark_package_name installation failed, exiting"
 		exit 1
 	fi
 }

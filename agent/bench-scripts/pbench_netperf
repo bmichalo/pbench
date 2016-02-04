@@ -34,8 +34,9 @@ pbench_bin="`cd ${script_path}/..; /bin/pwd`"
 . "$pbench_bin"/base
 
 benchmark="netperf"
+benchmark_package_name="pbench-$benchmark"
+benchmark_package_ver="2.7.0"
 benchmark_bin=/usr/bin/$benchmark
-ver=2.6.0
 spacing=25
 
 
@@ -116,10 +117,10 @@ function start_server {
 }
 
 function install_netperf {
-	if check_install_rpm $benchmark $ver; then
-		debug_log "[$script_name]$benchmark is installed"
+	if check_install_rpm $benchmark_package_name $benchmark_package_ver; then
+		debug_log "[$script_name]$benchmark_package_name is installed"
 	else
-		error_log "[$script_name]$benchmark installation failed, exiting"
+		error_log "[$script_name]$benchmark_package_name installation failed, exiting"
 		exit 1
 	fi
 }
