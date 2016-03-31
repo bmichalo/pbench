@@ -149,11 +149,21 @@ sub get_avg_stddev {
 		return (0 + $avg, 0 + $stddev, 0 + $stddevpct, 0 + $closest_index);
 	}
 }
-	
-opendir(my $dh, $dir) || die "$script: could not open directory $dir: $!\n";
+
 my $file;
+my $dh;
+# It's possible some of the sample directories have already been archived
+# (from a previous call to this script), so un-tar them
+opendir($dh, $dir) || die "$script: could not open directory $dir: $!\n";
 foreach $file ( readdir($dh) ) {
-	if ($file =~ /sample(\d+)?/) {
+	if ($file =~ /^sample(\d+)\.tar\.xz$/ ) {
+		system("tar --directory=\"$dir\" --extract --xz --force-local --file=$file; /bin/rm -rf \"$file\"");
+	}
+}
+# get json data for all samples
+opendir($dh, $dir) || die "$script: could not open directory $dir: $!\n";
+foreach $file ( readdir($dh) ) {
+	if ($file =~ /^sample(\d+)$/) {
 		my $sample_id = $1;
 		my $sample_file = "$dir/sample$sample_id/result.json";
 		open( TXT, "<$sample_file" ) or die "Can't open $sample_file: $!";
@@ -257,10 +267,11 @@ my $sample_num;
 for ($sample_num = 1; $sample_num < scalar @{$iteration{'throughput'}{$primary_metric}[0]{'samples'}} + 1; $sample_num++) {
 	if ($sample_num == $iteration{'throughput'}{$primary_metric}[0]{'closest-sample'}) {
 		# use "reference-result" to point to result which is closest to the average
-		system("ln -sf sample$sample_num reference-result");
+		system("rm -rf $dir/reference-result");
+		system("ln -sf sample$sample_num $dir/reference-result");
 	} else {
 		if ($tar_nonref_data eq "y") {
-			system("tar --directory=$dir --create --xz --force-local --file=sample$sample_num.tar.xz sample$sample_num; /bin/rm -rf sample$sample_num");
+			system("tar --directory=$dir --create --xz --force-local --file=$dir/sample$sample_num.tar.xz sample$sample_num; /bin/rm -rf \"$dir/sample$sample_num\"");
 		}
 	}
 	if ($fail && $keep_failed_tool_data eq "n") {
