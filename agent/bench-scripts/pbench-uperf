@@ -14,6 +14,7 @@
 #
 # This script will also generate a "summary-results.txt" with a table of all
 # results, efficiency, and other stats.
+pbench_cmd="$@"
 
 script_path=`dirname $0`
 script_name=`basename $0`
@@ -372,6 +373,10 @@ else
 	fi
 fi
 
+# save a copy of the command, in case the test needs to be reproduced or post-processed again
+echo "$script_name $pbench_cmd" >$benchmark_run_dir/$script_name.cmd
+chmod +x $benchmark_run_dir/$script_name.cmd
+
 # Verify the tool group exists
 verify_tool_group $tool_group
 
@@ -607,6 +612,11 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 									((server_nr++))
 								done
 							else
+								pushd $iteration_dir >/dev/null
+								if [ ! -e sample$sample -a -e sample$sample.tar.xz ]; then
+									tar Jxf sample$sample.tar.xz && /bin/rm -rf sample$sample.tar.xz
+								fi
+								popd >/dev/null
 								if [[ ! -d $benchmark_results_dir ]]; then
 									error_log "Results directory $benchmark_results_dir does not exist, skipping post-processing"
 									continue
@@ -614,12 +624,14 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 								echo "Not going to run uperf.  Only postprocesing existing data"
 								log "Not going to run uperf.  Only postprocesing existing data"
 							fi
-							$script_path/postprocess/$benchmark-postprocess "$benchmark_results_dir" "$protocol" "$message_size" "$instance" "$test_type" "$clients" "$servers" "$tool_label_pattern" "$tool_group" "$ver"
+							echo "$script_path/postprocess/$benchmark-postprocess \"$benchmark_results_dir\" \"$protocol\" \"$message_size\" \"$instance\" \"$test_type\" \"$clients\" \"$servers\" \"$tool_label_pattern\" \"$tool_group\" \"$ver\"" >"$benchmark_results_dir/$benchmark-postprocess.cmd"
+							chmod +x "$benchmark_results_dir/$benchmark-postprocess.cmd"
+							$benchmark_results_dir/$benchmark-postprocess.cmd
 						done
-						$script_path/postprocess/process-iteration-samples "$iteration_dir" "$primary_metric" "$maxstddevpct" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
-						echo $script_path/postprocess/process-iteration-samples "$iteration_dir" "$primary_metric" "$maxstddevpct" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
+						echo "$script_path/postprocess/process-iteration-samples \"$iteration_dir\" \"$primary_metric\" \"$maxstddevpct\" \"$failures\" \"$max_failures\" \"$tar_nonref_data\" \"$keep_failed_tool_data\"" >"$iteration_dir/process-iteration-samples.cmd"
+						chmod +x "$iteration_dir/process-iteration-samples.cmd"
+						$iteration_dir/process-iteration-samples.cmd
 						fail=$?
-						echo "process-interation-samples exit code: $fail"
 						if [ $fail -eq 1 ]; then
 							((failures++))
 						fi
