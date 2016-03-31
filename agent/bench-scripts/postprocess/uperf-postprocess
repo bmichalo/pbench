@@ -241,7 +241,7 @@ foreach $result_file ( readdir($dh) ) {
 		my $uid = "client::%" . $client_hostname_label . "%-server::%" . $server_hostname_label . "%:%" . $server_port_label . "%";
 		if ( (@latency_samples) ) {
 			my %this_lat_dataset;
-			my $description = "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 messgae, over a 1 second window";
+			my $description = "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 message, over a 1 second window";
 			my $mean = get_mean(\@latency_samples);
 			%this_lat_dataset = ( $uid_label => $uid, $description_label => $description, $role_label => $role, $client_hostname_label => $client_hostname, $server_hostname_label => $server_hostname, $server_port_label => int $server_port, $value_label => $mean, $timeseries_label => \@latency_samples);
 			push(@usec, \%this_lat_dataset);
