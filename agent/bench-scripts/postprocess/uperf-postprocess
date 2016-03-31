@@ -65,6 +65,7 @@ my $server_hostname_label = 'server_' . $hostname_label;
 my $server_port_label = 'server_port';
 my $value_label = 'value';
 my $timeseries_label = 'timeseries';
+my $date_label = 'date';
 
 if ($test_type =~ /rr/) {
 	$uperf_primary_metric="trans_sec";
@@ -298,31 +299,30 @@ foreach $metric_class ('throughput', 'latency') {
 	my $metric_type;
 	foreach $metric_type (keys %{ $workload{$metric_class} }) {
 		my %aggregate_dataset; # a new dataset for aggregated results
-		$aggregate_dataset{'descrption'} = $workload{$metric_class}{$metric_type}[0]{'description'};
-		$aggregate_dataset{'role'} = "aggregate";
-		$aggregate_dataset{'client_hostname'} = "all";
-		$aggregate_dataset{'server_hostname'} = "all";
-		$aggregate_dataset{'server_port'} = "all";
-		$aggregate_dataset{'uid'} = "client::%client_hostname%-server::%server_hostname%:%server_port%";
-		$aggregate_dataset{'role'} = "aggregate";
+		$aggregate_dataset{$description_label} = $workload{$metric_class}{$metric_type}[0]{$description_label};
+		$aggregate_dataset{$role_label} = "aggregate";
+		$aggregate_dataset{$client_hostname_label} = "all";
+		$aggregate_dataset{$server_hostname_label} = "all";
+		$aggregate_dataset{$server_port_label} = "all";
+		$aggregate_dataset{$uid_label} = "client::%" . $client_hostname_label . "%-server::%" . $server_hostname_label . "%:%" . $server_port_label . "%";
 		# use the same timstamps from the first data
-		@ref_timestamps = get_timestamps(\@{ $workload{$metric_class}{$metric_type}[0]{'timeseries'}});
+		@ref_timestamps = get_timestamps(\@{ $workload{$metric_class}{$metric_type}[0]{$timeseries_label}});
 		my @aggregate_samples;
 		# our new timeseries array for aggregate starts off with 0s
 		foreach $timestamp_ms (@ref_timestamps) {
-			my %aggregate_sample = ( 'date' => int $timestamp_ms, 'value' => 0);
+			my %aggregate_sample = ( $date_label => int $timestamp_ms, $value_label => 0);
 			push(@aggregate_samples, \%aggregate_sample);
 		}
 		# And now we add the values from each per server result to that hash one at a time
 		my $i;
 		for ($i=0; $i < scalar @{ $workload{$metric_class}{$metric_type} }; $i++) {
-			calc_sum_series(\@{ $workload{$metric_class}{$metric_type}[$i]{'timeseries'} }, \@aggregate_samples);
+			calc_sum_series(\@{ $workload{$metric_class}{$metric_type}[$i]{$timeseries_label} }, \@aggregate_samples);
 		}
 		if ( $metric_class eq 'latency' ) {
 			div_series(\@aggregate_samples, $i);
 		}
-		$aggregate_dataset{'value'} = get_mean(\@aggregate_samples);
-		$aggregate_dataset{'timeseries'} = \@aggregate_samples;
+		$aggregate_dataset{$value_label} = get_mean(\@aggregate_samples);
+		$aggregate_dataset{$timeseries_label} = \@aggregate_samples;
 		# The aggregate data should be the first in the array
 		unshift(@{ $workload{$metric_class}{$metric_type} }, \%aggregate_dataset);
 	}
@@ -436,20 +436,3 @@ my %graph_threshold;
 # combinatorial check of timestamps. uperf-postprocess is the
 # only script that makes use of it.
 gen_data(\%uperf_rate, \%graph_type, \%graph_threshold, $dir, 1);
-
-		# remove the leading and trailing 5 rate samples as they can be inaccurate
-		##if ($test_type =~ /_rr/) {
-			##my @this_rate_timestamps = (sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label} });
-			##for (my $i=0; $i<5; $i++) {
-				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{shift(@this_rate_timestamps)};
-				##delete $uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{shift(@this_rate_timestamps)};
-				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{pop(@this_rate_timestamps)};
-				##delete $uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{pop(@this_rate_timestamps)};
-			##}
-		##} else {
-			##my @this_rate_timestamps = (sort {$a<=>$b} keys %{ $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label} });
-			##for (my $i=0; $i<=4; $i++) {
-				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{shift(@this_rate_timestamps)};
-				##delete $uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{pop(@this_rate_timestamps)};
-			##}
-		##}
