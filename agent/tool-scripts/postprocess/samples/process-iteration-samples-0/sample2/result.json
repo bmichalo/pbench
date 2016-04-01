@@ -1,0 +1,623 @@
+{
+   "parameters" : {
+      "benchmark" : [
+         {
+            "protocol" : "tcp",
+            "message-size-bytes" : 64,
+            "instances" : 1,
+            "version" : "1.0.4",
+            "name" : "uperf",
+            "clients" : "perf102,perf102",
+            "test-type" : "rr",
+            "servers" : "perf104,perf104"
+         }
+      ]
+   },
+   "resource" : {
+      "cpu_busy" : [
+         {
+            "timeseries" : [
+               {
+                  "value" : 0.2901,
+                  "date" : 1459451573000
+               },
+               {
+                  "value" : 0.0799,
+                  "date" : 1459451574000
+               },
+               {
+                  "value" : 0.1415,
+                  "date" : 1459451575000
+               },
+               {
+                  "value" : 0.2408,
+                  "date" : 1459451576000
+               },
+               {
+                  "value" : 0.1835,
+                  "date" : 1459451577000
+               },
+               {
+                  "value" : 0.1931,
+                  "date" : 1459451578000
+               },
+               {
+                  "value" : 0.2022,
+                  "date" : 1459451579000
+               },
+               {
+                  "value" : 0.2017,
+                  "date" : 1459451580000
+               },
+               {
+                  "value" : 0.163,
+                  "date" : 1459451581000
+               },
+               {
+                  "value" : 0.1434,
+                  "date" : 1459451582000
+               },
+               {
+                  "value" : 0.1928,
+                  "date" : 1459451583000
+               },
+               {
+                  "value" : 0.1928,
+                  "date" : 1459451584000
+               },
+               {
+                  "value" : 0.1733,
+                  "date" : 1459451585000
+               },
+               {
+                  "value" : 0.1826,
+                  "date" : 1459451586000
+               },
+               {
+                  "value" : 0.1741,
+                  "date" : 1459451587000
+               },
+               {
+                  "value" : 0.2021,
+                  "date" : 1459451588000
+               },
+               {
+                  "value" : 0.2223,
+                  "date" : 1459451589000
+               },
+               {
+                  "value" : 0.1622,
+                  "date" : 1459451590000
+               },
+               {
+                  "value" : 0.2228,
+                  "date" : 1459451591000
+               },
+               {
+                  "value" : 0.123,
+                  "date" : 1459451592000
+               }
+            ],
+            "uid" : "host::%hostname%",
+            "value" : 0.18436,
+            "hostname" : "perf102",
+            "role" : "uperf-host",
+            "description" : "Total busy CPU usage, averaged over N seconds, where 1.0 = 1 logical CPU"
+         }
+      ]
+   },
+   "latency" : {
+      "usec" : [
+         {
+            "timeseries" : [
+               {
+                  "value" : 92.9713727231751,
+                  "date" : 1459451577952
+               },
+               {
+                  "value" : 92.8803513350154,
+                  "date" : 1459451578953
+               },
+               {
+                  "value" : 92.9251524383318,
+                  "date" : 1459451579954
+               },
+               {
+                  "value" : 92.9701846654831,
+                  "date" : 1459451580955
+               },
+               {
+                  "value" : 93.0948250116177,
+                  "date" : 1459451581956
+               },
+               {
+                  "value" : 93.1288224749553,
+                  "date" : 1459451582957
+               },
+               {
+                  "value" : 93.048494996561,
+                  "date" : 1459451583958
+               },
+               {
+                  "value" : 93.0763625937523,
+                  "date" : 1459451584959
+               },
+               {
+                  "value" : 93.0732124430658,
+                  "date" : 1459451585960
+               },
+               {
+                  "value" : 93.1355245299366,
+                  "date" : 1459451586961
+               },
+               {
+                  "value" : 93.1006644911869,
+                  "date" : 1459451587962
+               },
+               {
+                  "value" : 93.0785230266994,
+                  "date" : 1459451588963
+               },
+               {
+                  "value" : 93.0416487582586,
+                  "date" : 1459451589964
+               },
+               {
+                  "value" : 92.9673430572526,
+                  "date" : 1459451590965
+               },
+               {
+                  "value" : 93.0345628544004,
+                  "date" : 1459451591966
+               },
+               {
+                  "value" : 93.0865583887893,
+                  "date" : 1459451592967
+               },
+               {
+                  "value" : 94.0760961799487,
+                  "date" : 1459451593967
+               }
+            ],
+            "client_hostname" : "all",
+            "uid" : "client::%client_hostname%-server::%server_hostname%:%server_port%",
+            "value" : 93.09939411579,
+            "description" : "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 message, over a 1 second window",
+            "server_hostname" : "all",
+            "role" : "aggregate",
+            "server_port" : "all"
+         },
+         {
+            "timeseries" : [
+               {
+                  "value" : 93.4815091520359,
+                  "date" : 1459451576951
+               },
+               {
+                  "value" : 92.9002320185615,
+                  "date" : 1459451577952
+               },
+               {
+                  "value" : 92.8528361393256,
+                  "date" : 1459451578953
+               },
+               {
+                  "value" : 92.9390464695232,
+                  "date" : 1459451579954
+               },
+               {
+                  "value" : 92.9692579177115,
+                  "date" : 1459451580955
+               },
+               {
+                  "value" : 93.0946291560102,
+                  "date" : 1459451581956
+               },
+               {
+                  "value" : 93.1552743008701,
+                  "date" : 1459451582957
+               },
+               {
+                  "value" : 93.0254170345244,
+                  "date" : 1459451583958
+               },
+               {
+                  "value" : 93.0946291560102,
+                  "date" : 1459451584959
+               },
+               {
+                  "value" : 93.0470347648262,
+                  "date" : 1459451585960
+               },
+               {
+                  "value" : 93.1422722620266,
+                  "date" : 1459451586961
+               },
+               {
+                  "value" : 93.0989583333333,
+                  "date" : 1459451587962
+               },
+               {
+                  "value" : 93.0729893072989,
+                  "date" : 1459451588963
+               },
+               {
+                  "value" : 93.1076178960097,
+                  "date" : 1459451589964
+               },
+               {
+                  "value" : 92.9002320185615,
+                  "date" : 1459451590965
+               },
+               {
+                  "value" : 93.0210946938017,
+                  "date" : 1459451591966
+               },
+               {
+                  "value" : 93.0643361844552,
+                  "date" : 1459451592967
+               },
+               {
+                  "value" : 94.1442289587648,
+                  "date" : 1459451593967
+               },
+               {
+                  "value" : 113.599848785559,
+                  "date" : 1459451595169
+               }
+            ],
+            "client_hostname" : "perf102",
+            "uid" : "client::%client_hostname%-server::%server_hostname%:%server_port%",
+            "value" : 94.1953391868005,
+            "description" : "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 message, over a 1 second window",
+            "server_hostname" : "perf104",
+            "role" : "client",
+            "server_port" : 21000
+         },
+         {
+            "timeseries" : [
+               {
+                  "value" : 93.4553263000653,
+                  "date" : 1459451577230
+               },
+               {
+                  "value" : 92.8829915560917,
+                  "date" : 1459451578231
+               },
+               {
+                  "value" : 92.9174788823912,
+                  "date" : 1459451579232
+               },
+               {
+                  "value" : 92.9088546500835,
+                  "date" : 1459451580233
+               },
+               {
+                  "value" : 92.9951690821256,
+                  "date" : 1459451581234
+               },
+               {
+                  "value" : 93.133606252326,
+                  "date" : 1459451582235
+               },
+               {
+                  "value" : 93.0903003812889,
+                  "date" : 1459451583236
+               },
+               {
+                  "value" : 93.0643361844552,
+                  "date" : 1459451584237
+               },
+               {
+                  "value" : 93.0556846704471,
+                  "date" : 1459451585238
+               },
+               {
+                  "value" : 93.1162790697674,
+                  "date" : 1459451586239
+               },
+               {
+                  "value" : 93.133606252326,
+                  "date" : 1459451587240
+               },
+               {
+                  "value" : 93.0903003812889,
+                  "date" : 1459451588241
+               },
+               {
+                  "value" : 93.0816440394272,
+                  "date" : 1459451589242
+               },
+               {
+                  "value" : 92.9347321511466,
+                  "date" : 1459451590243
+               },
+               {
+                  "value" : 93.0729893072989,
+                  "date" : 1459451591244
+               },
+               {
+                  "value" : 93.0383864671438,
+                  "date" : 1459451592245
+               },
+               {
+                  "value" : 93.1358852565894,
+                  "date" : 1459451593245
+               },
+               {
+                  "value" : 94.3449575871819,
+                  "date" : 1459451594246
+               },
+               {
+                  "value" : 111.751580513202,
+                  "date" : 1459451595448
+               }
+            ],
+            "client_hostname" : "perf102",
+            "uid" : "client::%client_hostname%-server::%server_hostname%:%server_port%",
+            "value" : 94.116005736034,
+            "description" : "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 message, over a 1 second window",
+            "server_hostname" : "perf104",
+            "role" : "client",
+            "server_port" : 22000
+         }
+      ]
+   },
+   "throughput" : {
+      "trans_sec" : [
+         {
+            "timeseries" : [
+               {
+                  "value" : 21512.0923033011,
+                  "date" : 1459451577952
+               },
+               {
+                  "value" : 21533.0818033116,
+                  "date" : 1459451578953
+               },
+               {
+                  "value" : 21522.6985801411,
+                  "date" : 1459451579954
+               },
+               {
+                  "value" : 21512.2749378494,
+                  "date" : 1459451580955
+               },
+               {
+                  "value" : 21483.4760643951,
+                  "date" : 1459451581956
+               },
+               {
+                  "value" : 21475.6307628436,
+                  "date" : 1459451582957
+               },
+               {
+                  "value" : 21494.1696664973,
+                  "date" : 1459451583958
+               },
+               {
+                  "value" : 21487.7335451761,
+                  "date" : 1459451584959
+               },
+               {
+                  "value" : 21488.4625863647,
+                  "date" : 1459451585960
+               },
+               {
+                  "value" : 21474.0833591982,
+                  "date" : 1459451586961
+               },
+               {
+                  "value" : 21482.1242693371,
+                  "date" : 1459451587962
+               },
+               {
+                  "value" : 21487.2340446766,
+                  "date" : 1459451588963
+               },
+               {
+                  "value" : 21495.7659722895,
+                  "date" : 1459451589964
+               },
+               {
+                  "value" : 21512.9465938657,
+                  "date" : 1459451590965
+               },
+               {
+                  "value" : 21497.387727158,
+                  "date" : 1459451591966
+               },
+               {
+                  "value" : 21485.3827312687,
+                  "date" : 1459451592967
+               },
+               {
+                  "value" : 21259.7524802869,
+                  "date" : 1459451593967
+               }
+            ],
+            "client_hostname" : "all",
+            "uid" : "client::%client_hostname%-server::%server_hostname%:%server_port%",
+            "value" : 21482.6057310565,
+            "description" : "Number of transactions sent by client for a period of 1 second",
+            "server_hostname" : "all",
+            "role" : "aggregate",
+            "server_port" : "all"
+         },
+         {
+            "timeseries" : [
+               {
+                  "value" : 10697.3026973027,
+                  "date" : 1459451576951
+               },
+               {
+                  "value" : 10764.2357642358,
+                  "date" : 1459451577952
+               },
+               {
+                  "value" : 10769.7302697303,
+                  "date" : 1459451578953
+               },
+               {
+                  "value" : 10759.7402597403,
+                  "date" : 1459451579954
+               },
+               {
+                  "value" : 10756.2437562438,
+                  "date" : 1459451580955
+               },
+               {
+                  "value" : 10741.7582417582,
+                  "date" : 1459451581956
+               },
+               {
+                  "value" : 10734.7652347652,
+                  "date" : 1459451582957
+               },
+               {
+                  "value" : 10749.7502497503,
+                  "date" : 1459451583958
+               },
+               {
+                  "value" : 10741.7582417582,
+                  "date" : 1459451584959
+               },
+               {
+                  "value" : 10747.2527472527,
+                  "date" : 1459451585960
+               },
+               {
+                  "value" : 10736.2637362637,
+                  "date" : 1459451586961
+               },
+               {
+                  "value" : 10741.2587412587,
+                  "date" : 1459451587962
+               },
+               {
+                  "value" : 10744.2557442557,
+                  "date" : 1459451588963
+               },
+               {
+                  "value" : 10740.2597402597,
+                  "date" : 1459451589964
+               },
+               {
+                  "value" : 10764.2357642358,
+                  "date" : 1459451590965
+               },
+               {
+                  "value" : 10750.2497502498,
+                  "date" : 1459451591966
+               },
+               {
+                  "value" : 10745.2547452547,
+                  "date" : 1459451592967
+               },
+               {
+                  "value" : 10622,
+                  "date" : 1459451593967
+               },
+               {
+                  "value" : 8802.82861896839,
+                  "date" : 1459451595169
+               }
+            ],
+            "client_hostname" : "perf102",
+            "uid" : "client::%client_hostname%-server::%server_hostname%:%server_port%",
+            "value" : 10637.3233843834,
+            "description" : "Number of transactions sent by client for a period of 1 second",
+            "server_hostname" : "perf104",
+            "role" : "client",
+            "server_port" : 21000
+         },
+         {
+            "timeseries" : [
+               {
+                  "value" : 10700.2997002997,
+                  "date" : 1459451577230
+               },
+               {
+                  "value" : 10766.2337662338,
+                  "date" : 1459451578231
+               },
+               {
+                  "value" : 10762.2377622378,
+                  "date" : 1459451579232
+               },
+               {
+                  "value" : 10763.2367632368,
+                  "date" : 1459451580233
+               },
+               {
+                  "value" : 10753.2467532468,
+                  "date" : 1459451581234
+               },
+               {
+                  "value" : 10737.2627372627,
+                  "date" : 1459451582235
+               },
+               {
+                  "value" : 10742.2577422577,
+                  "date" : 1459451583236
+               },
+               {
+                  "value" : 10745.2547452547,
+                  "date" : 1459451584237
+               },
+               {
+                  "value" : 10746.2537462537,
+                  "date" : 1459451585238
+               },
+               {
+                  "value" : 10739.2607392607,
+                  "date" : 1459451586239
+               },
+               {
+                  "value" : 10737.2627372627,
+                  "date" : 1459451587240
+               },
+               {
+                  "value" : 10742.2577422577,
+                  "date" : 1459451588241
+               },
+               {
+                  "value" : 10743.2567432567,
+                  "date" : 1459451589242
+               },
+               {
+                  "value" : 10760.2397602398,
+                  "date" : 1459451590243
+               },
+               {
+                  "value" : 10744.2557442557,
+                  "date" : 1459451591244
+               },
+               {
+                  "value" : 10748.2517482517,
+                  "date" : 1459451592245
+               },
+               {
+                  "value" : 10737,
+                  "date" : 1459451593245
+               },
+               {
+                  "value" : 10599.4005994006,
+                  "date" : 1459451594246
+               },
+               {
+                  "value" : 8948.41930116473,
+                  "date" : 1459451595448
+               }
+            ],
+            "client_hostname" : "perf102",
+            "uid" : "client::%client_hostname%-server::%server_hostname%:%server_port%",
+            "value" : 10642.9415174544,
+            "description" : "Number of transactions sent by client for a period of 1 second",
+            "server_hostname" : "perf104",
+            "role" : "client",
+            "server_port" : 22000
+         }
+      ]
+   }
+}

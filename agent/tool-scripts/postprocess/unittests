@@ -63,6 +63,21 @@ function remove_sample_data {
 
 
 # Test uperf benchmark post-processing
+function testprocessiterationsamples {
+    echo "Testing bench-scripts/postprocess/process-iteration-samples under sample $1 ..."
+
+    mkdir /tmp/GenData/$1
+    cp -r samples/$1/* /tmp/GenData/$1
+
+    _TEST_ALTERNATE_TOOLS_LIBRARY=$(pwd) _TEST_ALTERNATE_BENCH_LIBRARY=$(pwd)/../../bench-scripts/postprocess \
+        ../../bench-scripts/postprocess/process-iteration-samples /tmp/GenData/$1 `cat /tmp/GenData/$1/process-iteration-samples-args` > /tmp/GenData/$1/stdout 2> /tmp/GenData/$1/stderr
+
+    remove_sample_data $1
+
+    diff --no-dereference -cr gold/$1/ /tmp/GenData/$1
+    return $?
+}
+# Test uperf benchmark post-processing
 function testuperf {
     echo "Testing bench-scripts/postprocess/uperf-postprocess under sample $1 ..."
 
@@ -123,6 +138,7 @@ function testcmpr {
 }
 
 res=0
+
 for i in $(ls -1 samples/) ; do
     if [[ ! -z "$testname" ]]; then
         if [[ "$testname" != "$i" ]]; then
