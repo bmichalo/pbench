@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
-# use strict;
-# use warnings;
+use strict;
+use warnings;
 
 # Check for an alternate tools library path for testing
 my $_test_alt_tools_lib;
@@ -22,7 +22,7 @@ use lib "$_test_alt_tools_lib";
 use lib "$_test_alt_bench_lib";
 no lib ".";
 use GenData qw(gen_data);
-use BenchPostprocess qw(get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series);
+use BenchPostprocess qw(get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
 use File::Basename;
 use Data::Dumper;
 use List::Util('sum');
@@ -66,7 +66,7 @@ my $server_port_label = 'server_port';
 my $value_label = 'value';
 my $timeseries_label = 'timeseries';
 my $date_label = 'date';
-
+my $uperf_primary_metric;
 if ($test_type =~ /rr/) {
 	$uperf_primary_metric="trans_sec";
 } else {
@@ -112,20 +112,21 @@ my @trans_sec;	# each array element contains a hash with:
 	    	# role: <client or server> <-uperf happens to always be client
 	    	# timeseries: a hash of timstamp:value key-pair
 
-my %benchmark_parameters_dataset = ( 'name' => uperf, 'version' => $benchmark_version, 'test-type' => $test_type, 'protocol' => $protocol, 'message-size-bytes' => $message_size, 'instances' => $instances, 'clients' => $clients, 'servers' => $servers );
+my %benchmark_parameters_dataset = ( 'name' => 'uperf', 'version' => $benchmark_version, 'test-type' => $test_type, 'protocol' => $protocol, 'message-size-bytes' => $message_size, 'instances' => $instances, 'clients' => $clients, 'servers' => $servers );
 push(@benchmark, \%benchmark_parameters_dataset);
 
 # Get the tool data
 # Define a set of tool directories which we want to use to report CPU and efficiency metrics
 # Search for tool directories which match the $tool_label_pattern
+my $this_tool_dir;
 my %tool_ids;
 my $tool_group_dir = "$dir/tools-$tool_group";
-if (opendir(my $dh, $tool_group_dir)) {
-	my $this_tool_dir;
+my $dh;
+if (opendir($dh, $tool_group_dir)) {
 	foreach $this_tool_dir (readdir($dh)) {
 		if ($this_tool_dir =~ /^$tool_label_pattern/) {
 			my $tool_dir_id = $this_tool_dir;
-			$tool_dir_id =~ s/^$tool_pattern_label//;
+			$tool_dir_id =~ s/^$tool_label_pattern//;
 			$this_tool_dir = $tool_group_dir . "/" . $this_tool_dir;
 			$tool_ids{$this_tool_dir} = $tool_dir_id;
 		}
@@ -133,6 +134,7 @@ if (opendir(my $dh, $tool_group_dir)) {
 } else {
 	print "$script: could not find any directories in $tool_group_dir which matched $tool_label_pattern\n";
 }
+closedir  $dh;
 foreach $this_tool_dir (keys %tool_ids) {
 	my $res;
 	my $this_tool_id = $tool_ids{$this_tool_dir};
@@ -160,9 +162,9 @@ if ( @cpu_busy ) {
 # There can be several result files, once for each server involved in this test
 # These are organized by server IP:port.
 #print "going to read dir: [$dir]\n";
-opendir(my $dh, $dir) || die "$script: could not open directory $dir: $!\n";
+opendir($dh, $dir) || die "$script: could not open directory $dir: $!\n";
 my $nr_result_files=0;
-
+my $result_file;
 foreach $result_file ( readdir($dh) ) {
 	# for each result file, build this:
 	# # {
@@ -182,12 +184,12 @@ foreach $result_file ( readdir($dh) ) {
 		my @throughput_samples;
 		my @latency_samples;
 
-		$this_nr_bytes_label = "bytes-" . $identifier; # a number of bytes (not a througput metric)
-		$this_nr_ops_label = "ops-" . $identifier; # a number of operations
-		$this_tput_label = "Gb_sec-_" . $identifier; # a number of bytes over time
-		$this_opssec_label = "ops_sec-" . $identifier; # a number of operations over time
-		$this_transsec_label = "trans_sec-" . $identifier; # a number of transactions over time
-		$this_lat_label = "usec-" . $identifier; # a time period
+		my $this_nr_bytes_label = "bytes-" . $identifier; # a number of bytes (not a througput metric)
+		my $this_nr_ops_label = "ops-" . $identifier; # a number of operations
+		my $this_tput_label = "Gb_sec-_" . $identifier; # a number of bytes over time
+		my $this_opssec_label = "ops_sec-" . $identifier; # a number of operations over time
+		my $this_transsec_label = "trans_sec-" . $identifier; # a number of transactions over time
+		my $this_lat_label = "usec-" . $identifier; # a time period
 		open(IN_FILE, "$dir/$result_file") || die "$script: could not open file $dir/$result_file: $!\n";
 		$prev_timestamp_ms = 0;
 		while (<IN_FILE>) {
@@ -198,35 +200,32 @@ foreach $result_file ( readdir($dh) ) {
 			# example of a sample: "time:1395170796.1234 name:Txn2 nr_bytes:22037790720 nr_ops:43042560"
 			if ( $line =~  /^timestamp_ms:(\d+)\.\d+\s+name:Txn2\s+nr_bytes:(\d+)\s+nr_ops:(\d+)/ ) {
 				$timestamp_ms = $1;
-				$bytes = $2;
-				$ops = $3;
+				my $bytes = $2;
+				my $ops = $3;
 				$uperf_sample{$this_nr_ops_label}{$timestamp_ms} = $ops;
 				$uperf_sample{$this_nr_bytes_label}{$timestamp_ms} = $bytes;
-	 			$timestamp_s_diff = ($timestamp_ms - $prev_timestamp_ms)/1000;
-				$nr_bytes_diff = $uperf_sample{$this_nr_bytes_label}{$timestamp_ms} - $uperf_sample{$this_nr_bytes_label}{$prev_timestamp_ms};
-				$nr_ops_diff = $uperf_sample{$this_nr_ops_label}{$timestamp_ms} - $uperf_sample{$this_nr_ops_label}{$prev_timestamp_ms};
-				if ( $nr_ops_diff == 0) {
-					next;
-				}
 				if ( $prev_timestamp_ms != 0 ) {
+	 				my $timestamp_s_diff = ($timestamp_ms - $prev_timestamp_ms)/1000;
+					my $nr_bytes_diff = $uperf_sample{$this_nr_bytes_label}{$timestamp_ms} - $uperf_sample{$this_nr_bytes_label}{$prev_timestamp_ms};
+					my $nr_ops_diff = $uperf_sample{$this_nr_ops_label}{$timestamp_ms} - $uperf_sample{$this_nr_ops_label}{$prev_timestamp_ms};
 					# This is what we are really interested in: computing value/sec metrics like Gb/sec and ops/sec
 					# We can do that once we have more than one sample
-					# store the "rate" metrics
 					if ($test_type =~ /rr/) {
-						$ops_sec = $nr_ops_diff /$timestamp_s_diff;
-						$trans_sec = $ops_sec /2;
+						my $ops_sec = $nr_ops_diff /$timestamp_s_diff;
+						my $trans_sec = $ops_sec /2;
 						# for request-response, 1 transaction is two ops, a write and a read.
 						$uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{$timestamp_ms} = $ops_sec /2;
-						$throughput_samples{$timestamp_ms} = $ops_sec /2;
 						# the latency is the full round trip for 1 transaction, which is also = ($instances / trans_sec)
 						# if --log-response-times in pbench_uperf is used, the write and read latency can be computed (later).
-						$uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{$timestamp_ms} = $instances /$trans_sec *1000000;
-						my %latency_sample = ( 'date' => int $timestamp_ms, 'value' => $instances /$trans_sec *1000000);
-						push(@latency_samples, \%latency_sample);
+						if ( $nr_ops_diff != 0) {
+							$uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{$timestamp_ms} = $instances /$trans_sec *1000000;
+							my %latency_sample = ( 'date' => int $timestamp_ms, 'value' => $instances /$trans_sec *1000000);
+							push(@latency_samples, \%latency_sample);
+						}
 						my %throughput_sample = ('date' => int $timestamp_ms, 'value' => $trans_sec);
 						push(@throughput_samples, \%throughput_sample);
 					} else {
-						$bytes_sec = $nr_bytes_diff /$timestamp_s_diff;
+						my $bytes_sec = $nr_bytes_diff /$timestamp_s_diff;
 						$uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{$timestamp_ms} = $nr_bytes_diff *8 /1000000000 /$timestamp_s_diff;
 						my %throughput_sample = ('date' => int $timestamp_ms, 'value' => ($nr_bytes_diff *8 /1000000000 /$timestamp_s_diff));
 						push(@throughput_samples, \%throughput_sample);
@@ -293,46 +292,6 @@ if ( %parameters ) {
 	$workload{'parameters'} = \%parameters;
 }
 		
-# process any data in %workload{'throughput'|'latency'}, aggregating various per-client results
-my $metric_class;
-foreach $metric_class ('throughput', 'latency') {
-	my $metric_type;
-	foreach $metric_type (keys %{ $workload{$metric_class} }) {
-		my %aggregate_dataset; # a new dataset for aggregated results
-		$aggregate_dataset{$description_label} = $workload{$metric_class}{$metric_type}[0]{$description_label};
-		$aggregate_dataset{$role_label} = "aggregate";
-		$aggregate_dataset{$client_hostname_label} = "all";
-		$aggregate_dataset{$server_hostname_label} = "all";
-		$aggregate_dataset{$server_port_label} = "all";
-		$aggregate_dataset{$uid_label} = "client::%" . $client_hostname_label . "%-server::%" . $server_hostname_label . "%:%" . $server_port_label . "%";
-		# use the same timstamps from the first data
-		@ref_timestamps = get_timestamps(\@{ $workload{$metric_class}{$metric_type}[0]{$timeseries_label}});
-		my @aggregate_samples;
-		# our new timeseries array for aggregate starts off with 0s
-		foreach $timestamp_ms (@ref_timestamps) {
-			my %aggregate_sample = ( $date_label => int $timestamp_ms, $value_label => 0);
-			push(@aggregate_samples, \%aggregate_sample);
-		}
-		# And now we add the values from each per server result to that hash one at a time
-		my $i;
-		for ($i=0; $i < scalar @{ $workload{$metric_class}{$metric_type} }; $i++) {
-			calc_sum_series(\@{ $workload{$metric_class}{$metric_type}[$i]{$timeseries_label} }, \@aggregate_samples);
-		}
-		if ( $metric_class eq 'latency' ) {
-			div_series(\@aggregate_samples, $i);
-		}
-		$aggregate_dataset{$value_label} = get_mean(\@aggregate_samples);
-		$aggregate_dataset{$timeseries_label} = \@aggregate_samples;
-		# The aggregate data should be the first in the array
-		unshift(@{ $workload{$metric_class}{$metric_type} }, \%aggregate_dataset);
-	}
-}
-
-my $json_file = $dir . "/result.json";
-my $json_text   = to_json( \%workload, { ascii => 1, pretty => 1 } );
-open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
-print JSON $json_text;
-close(JSON);
 
 # if there is a request-response test , and there is a log of the response times, process it.
 my $all_server_write_avg_time;
@@ -341,10 +300,10 @@ my $all_server_nr_reads = 0;
 my $all_server_nr_writes = 0;
 my @all_server_transaction_times;
 my $nr_resp_files = 0;
-opendir(my $dh, $dir) || die "$script: can't open directory $dir: $!\n";
-foreach $resp_file ( readdir($dh) ) {
+opendir($dh, $dir) || die "$script: can't open directory $dir: $!\n";
+foreach my $resp_file ( readdir($dh) ) {
 	if ( $resp_file =~ /^response-times-(.+).txt$/) {
-		$server_ip = $1;
+		my $server_ip = $1;
 		# The server ip should be in the file name, like "response-times-192.168.1.1.txt"
 		open(RESP_FILE, "$dir/$resp_file") || die "$script: can't open file $dir/$resp_file: $!\n";
 		#printf "$script: processing %s\n", $resp_file;
@@ -408,6 +367,7 @@ foreach $resp_file ( readdir($dh) ) {
 		printf "maximum latency: %.4f\n", $this_server_transaction_times[$#this_server_transaction_times];
 	}
 }
+closedir $dh;
 if ($nr_resp_files > 0) {
 	@all_server_transaction_times = sort {$a <=> $b} @all_server_transaction_times;
 	$all_server_write_avg_time /= $all_server_nr_writes;
@@ -425,6 +385,9 @@ if ($nr_resp_files > 0) {
 	$total{"read_latency_us"} = $all_server_read_avg_time;
 }
 
+calc_aggregate_metrics(\%workload);
+calc_efficiency_metrics(\%workload);
+
 # define the graph types
 # if you want something other than lineChart, put it here
 my %graph_type;
@@ -436,3 +399,11 @@ my %graph_threshold;
 # combinatorial check of timestamps. uperf-postprocess is the
 # only script that makes use of it.
 gen_data(\%uperf_rate, \%graph_type, \%graph_threshold, $dir, 1);
+
+# write to JSON format file
+my $json_file = $dir . "/result.json";
+my $json_text   = to_json( \%workload, { ascii => 1, pretty => 1 } );
+open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
+print JSON $json_text;
+close(JSON);
+

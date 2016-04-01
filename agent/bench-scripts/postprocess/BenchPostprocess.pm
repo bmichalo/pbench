@@ -13,9 +13,20 @@ use Exporter qw(import);
 use List::Util qw(max);
 use Data::Dumper;
 
-our @EXPORT_OK = qw(get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series);
+our @EXPORT_OK = qw(get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
 
 my $script = "BenchPostprocess";
+my $port_label = 'port';
+my $uid_label = 'uid';
+my $description_label = 'description';
+my $role_label = 'role';
+my $hostname_label = 'hostname';
+my $client_hostname_label = 'client_' . $hostname_label;
+my $server_hostname_label = 'server_' . $hostname_label;
+my $server_port_label = 'server_port';
+my $value_label = 'value';
+my $timeseries_label = 'timeseries';
+my $date_label = 'date';
 
 sub get_length {
 	my $text = shift;
@@ -223,8 +234,18 @@ sub calc_ratio_series {
 	# is no guarantee of that.  What we do is key off the timestamps of the second hash and interpolate a value from the first hash.
 	my $count = 0;
 	my $prev_numerator_timestamp_ms = 0;
-	my @numerator_timestamps = (sort {$a<=>$b} keys %{$numerator});
-	my @denominator_timestamps = (sort {$a<=>$b} keys %{$denominator});
+	#my @numerator_timestamps = (sort {$a<=>$b} keys %{$numerator});
+	my @numerator_timestamps = get_timestamps($numerator);
+	if ( scalar @numerator_timestamps == 0 ) {
+		print "warning: no timestamps found for numerator in calc_ratio_series()\n";
+		return 1;
+	}
+	#my @denominator_timestamps = (sort {$a<=>$b} keys %{$denominator});
+	my @denominator_timestamps = get_timestamps($denominator);
+	if ( scalar @denominator_timestamps == 0 ) {
+		print "warning: no timestamps found for denominator in calc_ratio_series()\n";
+		return 2;
+	}
 	while ($denominator_timestamps[0] < $numerator_timestamps[0]) {
 		shift(@denominator_timestamps) || last;
 	}
@@ -238,7 +259,7 @@ sub calc_ratio_series {
 	my $denominator_timestamp_ms;
 	for $denominator_timestamp_ms (@denominator_timestamps) {
 		# don't attempt to calculate a ratio if we have divide by zero
-		if ($$denominator{$denominator_timestamp_ms} == 0) {
+		if (get_value($denominator, $denominator_timestamp_ms) == 0) {
 			next;
 		}
 		# find a pair of consecutive numerator timestamps which are before & after the denominator timestamp
@@ -249,16 +270,16 @@ sub calc_ratio_series {
 			$prev_numerator_timestamp_ms = $numerator_timestamp_ms;
 			$numerator_timestamp_ms = shift(@numerator_timestamps) || last;
 		}
-		my $numerator_value_base = $$numerator{$prev_numerator_timestamp_ms};
+		my $numerator_value_base = get_value($numerator, $prev_numerator_timestamp_ms);
 		my $denominator_prev_numerator_timestamp_diff_ms = ($denominator_timestamp_ms - $prev_numerator_timestamp_ms);
 		my $value_adj = 0;
 		if ($denominator_prev_numerator_timestamp_diff_ms != 0) {
 			my $numerator_prev_numerator_timestamp_diff_ms = ($numerator_timestamp_ms - $prev_numerator_timestamp_ms);
-			my $value_diff = $$numerator{$numerator_timestamp_ms} - $numerator_value_base;
+			my $value_diff = get_value($numerator, $numerator_timestamp_ms) - $numerator_value_base;
 			$value_adj = $value_diff * $denominator_prev_numerator_timestamp_diff_ms/$numerator_prev_numerator_timestamp_diff_ms;
 		}
 		my $numerator_value_interp = $numerator_value_base + $value_adj;
-		$$ratio{$denominator_timestamp_ms} = $numerator_value_interp/$$denominator{$denominator_timestamp_ms};
+		put_value($ratio, $denominator_timestamp_ms, $numerator_value_interp/get_value($denominator, $denominator_timestamp_ms));
 		# print "$$ratio{$denominator_timestamp_ms} :  $numerator_value_interp / $$denominator{$denominator_timestamp_ms}\n";
 		$count++;
 	}
@@ -343,6 +364,72 @@ sub div_series {
 	my $i;
 		for ($i=0; $i < scalar @{$div_from_ref}; $i++) {
 			$$div_from_ref[$i]{'value'} /= $divisor;
+		}
+	}
+}
+
+sub calc_aggregate_metrics {
+	my $params = shift;
+	my $workload_ref = $params;
+
+	# process any data in %workload{'throughput'|'latency'}, aggregating various per-client results
+	my $metric_class;
+	foreach $metric_class ('throughput', 'latency') {
+		my $metric_type;
+		foreach $metric_type (keys %{ $$workload_ref{$metric_class} }) {
+			my %aggregate_dataset; # a new dataset for aggregated results
+			$aggregate_dataset{$description_label} = $$workload_ref{$metric_class}{$metric_type}[0]{$description_label};
+			$aggregate_dataset{$role_label} = "aggregate";
+			$aggregate_dataset{$client_hostname_label} = "all";
+			$aggregate_dataset{$server_hostname_label} = "all";
+			$aggregate_dataset{$server_port_label} = "all";
+			$aggregate_dataset{$uid_label} = "client::%" . $client_hostname_label . "%-server::%" . $server_hostname_label . "%:%" . $server_port_label . "%";
+			# use the same timstamps from the first data
+			my @ref_timestamps = get_timestamps(\@{ $$workload_ref{$metric_class}{$metric_type}[0]{$timeseries_label}});
+			my @aggregate_samples;
+			# our new timeseries array for aggregate starts off with 0s
+			foreach my $timestamp_ms (@ref_timestamps) {
+				my %aggregate_sample = ( $date_label => int $timestamp_ms, $value_label => 0);
+				push(@aggregate_samples, \%aggregate_sample);
+			}
+			# And now we add the values from each per server result to that hash one at a time
+			my $i;
+			for ($i=0; $i < scalar @{ $$workload_ref{$metric_class}{$metric_type} }; $i++) {
+				calc_sum_series(\@{ $$workload_ref{$metric_class}{$metric_type}[$i]{$timeseries_label} }, \@aggregate_samples);
+			}
+			if ( $metric_class eq 'latency' ) {
+				div_series(\@aggregate_samples, $i);
+			}
+			$aggregate_dataset{$value_label} = get_mean(\@aggregate_samples);
+			$aggregate_dataset{$timeseries_label} = \@aggregate_samples;
+			# The aggregate data should be the first in the array
+			unshift(@{ $$workload_ref{$metric_class}{$metric_type} }, \%aggregate_dataset);
+		}
+	}
+}
+
+sub calc_efficiency_metrics {
+	my $params = shift;
+	my $workload_ref = $params;
+
+	my $resource_metric_name;
+	foreach $resource_metric_name (keys $$workload_ref{'resource'}) {
+		for (my $i = 0; $i < scalar @{ $$workload_ref{'resource'}{$resource_metric_name} }; $i++) { # cpu_busy[$i]
+			foreach my $throughput_metric_name (keys $$workload_ref{'throughput'} ) { # Gb-sec, trans_sec
+				for (my $j = 0; $j < scalar @{ $$workload_ref{'throughput'}{$throughput_metric_name} }; $j++) { # Gb_sec[$i], trans_sec[$i]
+					if ( $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{$client_hostname_label} eq $$workload_ref{'resource'}{$resource_metric_name}[$i]{$hostname_label} ) {
+						my $eff_metric_name = $throughput_metric_name . "/" . $resource_metric_name;
+						my %eff_dataset; # a new dataset for throughput/resource
+						$eff_dataset{$description_label} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{$description_label} . " divided-by " . $$workload_ref{'resource'}{$resource_metric_name}[$i]{$description_label};
+						my @eff_samples;
+						# And now we calculate a ratio
+						if ( calc_ratio_series(\@{ $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{$timeseries_label} }, \@{ $$workload_ref{'resource'}{$resource_metric_name}[$i]{$timeseries_label} }, \@eff_samples) == 0) {
+							$eff_dataset{$timeseries_label} = \@eff_samples;
+						}
+						unshift(@{ $$workload_ref{'efficiency'}{$eff_metric_name} }, \%eff_dataset);
+					}
+				}
+			}
 		}
 	}
 }
