@@ -164,11 +164,11 @@ push(@benchmark, { 'name' => "MoonGen",
 		   'acceptable_loss_pct' => "$acceptable_loss_pct",
 		   'port_list' => "$port_list" } );
 push(@Mframes_sec, { 'description' => "The number of Ethernet frames (in millions) received per second",
-		     'uid' => "port:\$port",
+		     'uid' => "port:%port%",
 		     'port' => "all",
 		     'value' => $rate } );
 push(@Gb_sec, { 'description' => "The number of bits (in billions) received from Ethernet phsycial layer per second",
-		'uid' => "port:\$port",
+		'uid' => "port:%port%",
 		'port' => "all",
 		'value' => ($frame_size *8 +64 +96) *$rate /1000 } );
 
