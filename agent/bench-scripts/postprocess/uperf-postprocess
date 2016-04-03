@@ -21,7 +21,6 @@ BEGIN {
 use lib "$_test_alt_tools_lib";
 use lib "$_test_alt_bench_lib";
 no lib ".";
-require 'bench-config.pl';
 use GenData qw(gen_data);
 use BenchPostprocess qw(get_label create_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
 use File::Basename;
@@ -218,15 +217,16 @@ foreach $result_file ( readdir($dh) ) {
 						# if --log-response-times in pbench_uperf is used, the write and read latency can be computed (later).
 						if ( $nr_ops_diff != 0) {
 							$uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{$timestamp_ms} = $instances /$trans_sec *1000000;
-							my %latency_sample = ( 'date' => int $timestamp_ms, 'value' => $instances /$trans_sec *1000000);
+							my %latency_sample = ( get_label('date_label') => int $timestamp_ms, get_label('value_label') => $instances /$trans_sec *1000000);
 							push(@latency_samples, \%latency_sample);
 						}
-						my %throughput_sample = ('date' => int $timestamp_ms, 'value' => $trans_sec);
+						#my %throughput_sample = (get_label('date_value') => int $timestamp_ms, get_label('value_label') => $trans_sec);
+						my %throughput_sample = (get_label('date_label') => int $timestamp_ms, get_label('value_label') => $trans_sec);
 						push(@throughput_samples, \%throughput_sample);
 					} else {
 						my $bytes_sec = $nr_bytes_diff /$timestamp_s_diff;
 						$uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{$timestamp_ms} = $nr_bytes_diff *8 /1000000000 /$timestamp_s_diff;
-						my %throughput_sample = ('date' => int $timestamp_ms, 'value' => ($nr_bytes_diff *8 /1000000000 /$timestamp_s_diff));
+						my %throughput_sample = (get_label('date_label') => int $timestamp_ms, get_label('value_label') => ($nr_bytes_diff *8 /1000000000 /$timestamp_s_diff));
 						push(@throughput_samples, \%throughput_sample);
 					}
 				}
