@@ -32,7 +32,7 @@ no lib ".";
 use JSON;
 use File::Basename;
 #use Data::Dumper;
-use BenchPostprocess qw(get_uid get_length);
+use BenchPostprocess qw(get_label get_uid get_length);
 my $script = basename($0);
 my $benchmark_name = $ARGV[0];
 my $orig_cmd = $ARGV[1];
@@ -102,7 +102,7 @@ my %metric_types;
 my @iteration_numbers = (keys %iterations_by_num);
 my $first_iteration_num = $iteration_numbers[0];
 my @all_metric_types = ('throughput', 'latency', 'resource', 'efficiency');
-my @all_metric_labels = ('mean', 'stddevpct', 'closest-sample');
+my @all_metric_labels = (get_label('mean_label'), get_label('stddevpct_label'), get_label('closest_sample_label'));
 
 # calculate spacing such that we have enough space for each column, but non extra (other than $padding)
 my %this_metric_type_spacing;
@@ -129,11 +129,11 @@ for ($i = 0; $i < scalar @iterations; $i++) {
 			my $j;
 			for ($j=0; $j < scalar @{$iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}}; $j++) { # Multiple elements of Gb_sec, or MB_sec, etc.
 				$spacing{$metric_type}{$metric_name}[$j+1]{'header'} = 0;
-				foreach $metric_label ( sort keys %{ $iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j] } ) { #average, stddevpct, closest-sample
+				foreach $metric_label ( sort keys %{ $iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j] } ) { #mean, stddevpct, closest_sample
 					if ( grep(/^$metric_label$/, @all_metric_labels) ) {
 						$metric_labels{$metric_label}++;
 						if ( defined $iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j]{$metric_label} ) {
-							if ( $metric_label ne "closest-sample" ) {
+							if ( $metric_label ne get_label('closest_sample_label') ) {
 								# convert numbers to standard format
 								$iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j]{$metric_label} = sprintf("%.4f", $iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j]{$metric_label});
 							}
@@ -154,7 +154,7 @@ for ($i = 0; $i < scalar @iterations; $i++) {
 						$spacing{$metric_type}{$metric_name}[$j+1]{'header'} += $spacing{$metric_type}{$metric_name}[$j+1]{$metric_label};
 					}
 				
-				} # loop $metric_label = average, stddevpct, closest-sample
+				} # loop $metric_label = mean, stddevpct, closest_sample
 				$spacing{$metric_type}{$metric_name}[$j+1]{'uid'} = get_length(get_uid($iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j]{'uid'}, \%{ $iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j] }));
 			} # $j = elements of a metric_type (Gb_sec[0..N]
 		}
@@ -174,7 +174,7 @@ foreach $metric_type (sort keys %spacing) {
 			for ($i = 1; $i < scalar @{$spacing{$metric_type}{$metric_name}}; $i++) {
 				$spacing{$metric_type}{$metric_name}[$i]{'header'} = 0;
 				# find the sum of the metric_label lengths
-				foreach $metric_label ( sort keys %{ $spacing{$metric_type}{$metric_name}[$i] } ) { #average, stddevpct, closest-sample
+				foreach $metric_label ( sort keys %{ $spacing{$metric_type}{$metric_name}[$i] } ) { #mean, stddevpct, closest_sample
 					if ( grep(/^$metric_label$/, @all_metric_labels) ) {
 						$spacing{$metric_type}{$metric_name}[$i]{'header'} += $spacing{$metric_type}{$metric_name}[$i]{$metric_label};
 					}
@@ -373,7 +373,7 @@ foreach $metric_type (sort keys %spacing) {
 printf TXT "\n";
 #printf HTML "\n";
 
-# print the headers for the metric-labels (average, stddev, closest-sample)
+# print the headers for the metric-labels (mean, stddevpct, closest_sample)
 $iteration_name = $iterations_by_num{$first_iteration_num};
 printf TXT "%$spacing{iter_num}s%$spacing{iter_name}s", "", "";
 printf HTML "<tr><td>%s</td><td>%s</td>", "", "";
@@ -408,7 +408,7 @@ foreach $metric_type (sort keys %spacing) {
 printf TXT "\n";
 printf HTML "</tr>\n";
 
-# for all iterations, print the *values* for the metric labels (average, stddev, closest-sample)
+# for all iterations, print the *values* for the metric labels (mean, stddevpct, closest_sample)
 for ($i = 0; $i < scalar @iterations; $i++) {
 	$iteration_name = $iterations[$i]{$iteration_name_field};
 	$iteration_num = $iterations[$i]{$iteration_number_field};
@@ -433,7 +433,7 @@ for ($i = 0; $i < scalar @iterations; $i++) {
 							if ( defined ($iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j-1]{$metric_label}) ) {
 								my $metric_label_string;
 								$metric_label_string = sprintf "%$spacing{$metric_type}{$metric_name}[$j]{$metric_label}s", $iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j-1]{$metric_label};
-								if ( $metric_label eq "closest-sample" ) { # embed a link to the closest sample
+								if ( $metric_label eq get_label('closest_sample_label') ) { # embed a link to the closest sample
 									printf HTML "<td><div align=\"right\"><a href=\"./$iteration_num-$iteration_name/sample$iterations[$i]{$iteration_data_field}{$metric_type}{$metric_name}[$j-1]{$metric_label}\">$metric_label_string</a></dev></td>";
 								} else {
 									printf HTML "<td><div align=\"right\">$metric_label_string</dev></td>";
@@ -443,13 +443,13 @@ for ($i = 0; $i < scalar @iterations; $i++) {
 									printf "warning: length of [%s] (%d) is longer than spacing for [%s] header (%s)\n", $metric_label_string, $length + $padding, $metric_label, $spacing{$metric_type}{$metric_name}[$j]{$metric_label};
 								}
 								$label_section = $label_section . sprintf "%$spacing{$metric_type}{$metric_name}[$j]{$metric_label}s", "$metric_label_string";
-								if ( $metric_label eq "average" ) {
+								if ( $metric_label eq get_label('mean_label') ) {
 									$csv_label_section = sprintf "%s,", "$metric_label_string";
 								}
 							} else {
 								printf HTML "<td></td>";
 								$label_section = $label_section . sprintf "%$spacing{$metric_type}{$metric_name}[$j]{$metric_label}s", "";
-								if ( $metric_label eq "average" ) {
+								if ( $metric_label eq get_label('mean_label') ) {
 									$csv_label_section = $csv_label_section = sprintf "%s,", "";
 								}
 							}
