@@ -23,7 +23,6 @@ BEGIN {
 use lib "$_test_alt_tools_lib";
 use lib "$_test_alt_bench_lib";
 no lib ".";
-require 'bench-config.pl';
 use BenchPostprocess qw(get_uid get_label get_cpubusy_series calc_ratio_series calc_sum_series);
 use File::Basename;
 use Data::Dumper;
