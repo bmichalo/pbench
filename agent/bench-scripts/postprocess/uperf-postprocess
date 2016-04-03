@@ -21,8 +21,9 @@ BEGIN {
 use lib "$_test_alt_tools_lib";
 use lib "$_test_alt_bench_lib";
 no lib ".";
+require 'bench-config.pl';
 use GenData qw(gen_data);
-use BenchPostprocess qw(get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
+use BenchPostprocess qw(get_label create_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
 use File::Basename;
 use Data::Dumper;
 use List::Util('sum');
@@ -39,7 +40,7 @@ sub mean {
 my $script = basename($0);
 my $dir = $ARGV[0];
 my $protocol = $ARGV[1];
-my $message_size = int $ARGV[2];
+my $message_size_bytes = int $ARGV[2];
 my $instances = int $ARGV[3];
 my $test_type = $ARGV[4];
 my $clients = $ARGV[5];
@@ -47,6 +48,7 @@ my $servers = $ARGV[6];
 my $tool_label_pattern = $ARGV[7];
 my $tool_group = $ARGV[8];
 my $benchmark_version = $ARGV[9];
+my $benchmark_name = 'uperf';
 my %uperf_sample;
 my %uperf_rate;
 my $timestamp_ms = 0;
@@ -55,17 +57,6 @@ my $timestamp_ms_diff;
 my $line;
 my %avg;
 my %total;
-my $port_label = 'port';
-my $uid_label = 'uid';
-my $description_label = 'description';
-my $role_label = 'role';
-my $hostname_label = 'hostname';
-my $client_hostname_label = 'client_' . $hostname_label;
-my $server_hostname_label = 'server_' . $hostname_label;
-my $server_port_label = 'server_port';
-my $value_label = 'value';
-my $timeseries_label = 'timeseries';
-my $date_label = 'date';
 my $uperf_primary_metric;
 if ($test_type =~ /rr/) {
 	$uperf_primary_metric="trans_sec";
@@ -112,7 +103,16 @@ my @trans_sec;	# each array element contains a hash with:
 	    	# role: <client or server> <-uperf happens to always be client
 	    	# timeseries: a hash of timstamp:value key-pair
 
-my %benchmark_parameters_dataset = ( 'name' => 'uperf', 'version' => $benchmark_version, 'test-type' => $test_type, 'protocol' => $protocol, 'message-size-bytes' => $message_size, 'instances' => $instances, 'clients' => $clients, 'servers' => $servers );
+my %benchmark_parameters_dataset = ( 	get_label('benchmark_name_label') => $benchmark_name,
+					get_label('benchmark_version_label') => $benchmark_version,
+					get_label('test_type_label') => $test_type,
+					get_label('protocol_label') => $protocol,
+					get_label('message_size_bytes_label') => $message_size_bytes,
+					get_label('instances_label') => $instances,
+					get_label('clients_label') => $clients,
+					get_label('servers_label') => $servers,
+					get_label('uid_label') => create_uid('benchmark_name_label', 'controller_host_label')  );
+
 push(@benchmark, \%benchmark_parameters_dataset);
 
 # Get the tool data
@@ -148,8 +148,7 @@ foreach $this_tool_dir (keys %tool_ids) {
 		my %this_cpubusy_dataset;
 		my $description = "Total busy CPU usage, averaged over N seconds, where 1.0 = 1 logical CPU";
 		my $mean = get_mean(\@cpubusy_samples);
-		my $uid = "host::%" . $hostname_label . "%"; 
-		%this_cpubusy_dataset = ( $uid_label => $uid, $description_label => $description, $role_label => $role, $hostname_label => $hostname, $value_label => $mean, $timeseries_label => \@cpubusy_samples);
+		%this_cpubusy_dataset = ( get_label('uid_label') => create_uid('hostname_label'), get_label('description_label') => $description, get_label('role_label') => $role, get_label('hostname_label') => $hostname, get_label('value_label') => $mean, get_label('timeseries_label') => \@cpubusy_samples );
 		push(@cpu_busy, \%this_cpubusy_dataset);
 		#write_influxdb_line_protocol("cpubusy", $influx_dir, \%this_cpubusy_dataset);
 	}
@@ -237,25 +236,28 @@ foreach $result_file ( readdir($dh) ) {
 		$nr_result_files++;
 		close(IN_FILE);
 		# the uid should be unique
-		my $uid = "client::%" . $client_hostname_label . "%-server::%" . $server_hostname_label . "%:%" . $server_port_label . "%";
 		if ( (@latency_samples) ) {
 			my %this_lat_dataset;
 			my $description = "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 message, over a 1 second window";
 			my $mean = get_mean(\@latency_samples);
-			%this_lat_dataset = ( $uid_label => $uid, $description_label => $description, $role_label => $role, $client_hostname_label => $client_hostname, $server_hostname_label => $server_hostname, $server_port_label => int $server_port, $value_label => $mean, $timeseries_label => \@latency_samples);
+			%this_lat_dataset = ( 	get_label('uid_label') => create_uid('client_hostname_label', 'server_hostname_label', 'server_port_label'), get_label('description_label') => $description,
+						get_label('role_label') => $role, get_label('client_hostname_label') => $client_hostname,
+						get_label('server_hostname_label') => $server_hostname, get_label('server_port_label') => int $server_port,
+						get_label('value_label') => $mean, get_label('timeseries_label') => \@latency_samples   );
 			push(@usec, \%this_lat_dataset);
 		}
 		if ( (@throughput_samples) ) {
 			my %this_tput_dataset;
+			my $mean = get_mean(\@throughput_samples);
+			%this_tput_dataset = ( 	get_label('role_label') => $role, get_label('client_hostname_label') => $client_hostname,
+						get_label('server_hostname_label') => $server_hostname, get_label('server_port_label') => int $server_port,
+						get_label('value_label') => $mean, get_label('timeseries_label') => \@throughput_samples,
+						get_label('uid_label') => create_uid('client_hostname_label', 'server_hostname_label', 'server_port_label')  );
 			if ($test_type =~ /rr/) {
-				my $description = "Number of transactions sent by client for a period of 1 second";
-				my $mean = get_mean(\@throughput_samples);
-				%this_tput_dataset = ( $uid_label => $uid, $description_label => $description, $role_label => $role, $client_hostname_label => $client_hostname, $server_hostname_label => $server_hostname, $server_port_label => int $server_port, $value_label => $mean, $timeseries_label => \@throughput_samples);
+				$this_tput_dataset{get_label('description_label')} = "Number of transactions sent by client for a period of 1 second";
 				push(@trans_sec, \%this_tput_dataset);
 			} else {
-				my $description = "Number of gigabits sent by client for a period of 1 second";
-				my $mean = get_mean(\@throughput_samples);
-				%this_tput_dataset = ( $uid_label => $uid, $description_label => $description, $role_label => $role, $client_hostname_label => $client_hostname, $server_hostname_label => $server_hostname, $server_port_label => int $server_port, $value_label => $mean, $timeseries_label => \@throughput_samples);
+				$this_tput_dataset{get_label('description_label')} = "Number of gigabits sent by client for a period of 1 second";
 				push(@Gb_sec, \%this_tput_dataset);
 			}
 		}

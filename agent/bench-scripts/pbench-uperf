@@ -373,10 +373,6 @@ else
 	fi
 fi
 
-# save a copy of the command, in case the test needs to be reproduced or post-processed again
-echo "$script_name $pbench_cmd" >$benchmark_run_dir/$script_name.cmd
-chmod +x $benchmark_run_dir/$script_name.cmd
-
 # Verify the tool group exists
 verify_tool_group $tool_group
 
@@ -431,6 +427,10 @@ if [ "$postprocess_only" != "y" ]; then
 fi
 
 mkdir -p $benchmark_run_dir/.running
+# save a copy of the command, in case the test needs to be reproduced or post-processed again
+echo "$script_name $pbench_cmd" >$benchmark_run_dir/$script_name.cmd
+chmod +x $benchmark_run_dir/$script_name.cmd
+
 
 ## Run the benchmark and start/stop perf analysis tools
 
