@@ -42,7 +42,12 @@ sub get_label {
 			'port_label' => 'port',
 			'controller_host_label' => 'controller_host',
 			'protocol_label', => 'protocol',
-			'server_port_label' => 'server_port');
+			'server_port_label' => 'server_port',
+			'mean_label' => 'mean',
+			'stddev_label' => 'stddev',
+			'stddevpct_label' => 'stddevpct',
+			'closest_sample_label' => 'closest_sample',	
+			'samples_label' => 'samples');
 	if ( $labels{$key} ) {
 		return $labels{$key}
 	} else {
