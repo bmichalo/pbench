@@ -327,7 +327,6 @@ foreach $metric_type (sort keys %spacing) {
 				if ( $length > $spacing{$metric_type}{$metric_name}[$i]{header} ) {
 					printf "iteration: %d metric_name_index: %d warning: length of mapped_uid_section [%s] (%d) is longer than spacing for metric_name [%s] header (%s)\n", $j, $i, $mapped_uid, $length, $metric_name, $spacing{$metric_type}{$metric_name}[$i]{'header'};
 				}
-				#printf HTML "<td>%s</td>", $mapped_uid;
 				printf HTML "<td colspan=$colspan><div align=\"center\">%s</div></td>", $mapped_uid;
 				$metric_section = $metric_section . sprintf "%$spacing{$metric_type}{$metric_name}[$i]{'header'}s", $mapped_uid;
 			}
@@ -337,7 +336,6 @@ foreach $metric_type (sort keys %spacing) {
 			printf "warning: length of metric_uid_section [$metric_section] (%d) is longer than spacing for metric_type [$metric_type] header (%s)\n", $length, $spacing{$metric_type}{'header'};
 		}
 		printf TXT "%$spacing{$metric_type}{'header'}s|", $metric_section;
-		printf HTML "%$spacing{$metric_type}{header}s+", $metric_section;
 	}
 }
 printf TXT "\n";
@@ -367,7 +365,6 @@ foreach $metric_type (sort keys %spacing) {
 			printf "warning: length of $metric_section (%d) is longer than spacing for $metric_type header (%s)\n", $length, $spacing{$metric_type}{header};
 		}
 		printf TXT "%$spacing{$metric_type}{header}s+", $metric_section;
-		#printf HTML "%$spacing{$metric_type}{header}s+", $metric_section;
 	}
 }
 printf TXT "\n";
