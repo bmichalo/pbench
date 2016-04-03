@@ -13,20 +13,54 @@ use Exporter qw(import);
 use List::Util qw(max);
 use Data::Dumper;
 
-our @EXPORT_OK = qw(get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
+our @EXPORT_OK = qw(get_label create_uid get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
 
 my $script = "BenchPostprocess";
-my $port_label = 'port';
-my $uid_label = 'uid';
-my $description_label = 'description';
-my $role_label = 'role';
-my $hostname_label = 'hostname';
-my $client_hostname_label = 'client_' . $hostname_label;
-my $server_hostname_label = 'server_' . $hostname_label;
-my $server_port_label = 'server_port';
-my $value_label = 'value';
-my $timeseries_label = 'timeseries';
-my $date_label = 'date';
+
+# always use this for labels in the hashes for JSON data
+sub get_label {
+	my $key = shift;
+	my %labels = (
+			'port_label' => 'port',
+			'uid_label' => 'uid',
+			'description_label' => 'description',
+			'role_label' => 'role',
+			'hostname_label' => 'hostname',
+			'client_hostname_label' => 'client_hostname',
+			'server_hostname_label' => 'server_hostname',
+			'server_port_label' => 'server_port',
+			'value_label' => 'value',
+			'timeseries_label' => 'timeseries',
+			'date_label' => 'date',
+			'benchmark_name_label' => 'benchmark_name',
+			'benchmark_version_label' => 'benchmark_version',
+			'test_type_label' => 'test_type',
+			'message_size_bytes_label' => 'message_size_bytes',
+			'instances_label' => 'instances',
+			'clients_label' => 'clients',
+			'servers_label' => 'servers',
+			'port_label' => 'port',
+			'controller_host_label' => 'controller_host',
+			'protocol_label', => 'protocol',
+			'server_port_label' => 'server_port');
+	if ( $labels{$key} ) {
+		return $labels{$key}
+	} else {
+		print "warning: you tried to use a non-standard label [$key]\n";
+	}
+}
+
+sub create_uid {
+	my $uid;
+	foreach my $label (@_) {
+		if ( $uid ) {
+			$uid = $uid . "-" . get_label($label) . ':%' . get_label($label) . '%';
+		} else {
+			$uid = get_label($label) . ':%' . get_label($label) . '%';
+		}
+	}
+	return $uid;
+}
 
 sub get_length {
 	my $text = shift;
@@ -369,41 +403,42 @@ sub div_series {
 }
 
 sub calc_aggregate_metrics {
-	my $params = shift;
-	my $workload_ref = $params;
+	my $workload_ref = shift;
 
-	# process any data in %workload{'throughput'|'latency'}, aggregating various per-client results
-	my $metric_class;
-	foreach $metric_class ('throughput', 'latency') {
-		my $metric_type;
-		foreach $metric_type (keys %{ $$workload_ref{$metric_class} }) {
-			my %aggregate_dataset; # a new dataset for aggregated results
-			$aggregate_dataset{$description_label} = $$workload_ref{$metric_class}{$metric_type}[0]{$description_label};
-			$aggregate_dataset{$role_label} = "aggregate";
-			$aggregate_dataset{$client_hostname_label} = "all";
-			$aggregate_dataset{$server_hostname_label} = "all";
-			$aggregate_dataset{$server_port_label} = "all";
-			$aggregate_dataset{$uid_label} = "client::%" . $client_hostname_label . "%-server::%" . $server_hostname_label . "%:%" . $server_port_label . "%";
-			# use the same timstamps from the first data
-			my @ref_timestamps = get_timestamps(\@{ $$workload_ref{$metric_class}{$metric_type}[0]{$timeseries_label}});
-			my @aggregate_samples;
-			# our new timeseries array for aggregate starts off with 0s
-			foreach my $timestamp_ms (@ref_timestamps) {
-				my %aggregate_sample = ( $date_label => int $timestamp_ms, $value_label => 0);
-				push(@aggregate_samples, \%aggregate_sample);
+	if ($$workload_ref{'throughput'} and $$workload_ref{'latency'}) {
+		# process any data in %workload{'throughput'|'latency'}, aggregating various per-client results
+		my $metric_class;
+		foreach $metric_class ('throughput', 'latency') {
+			my $metric_type;
+			foreach $metric_type (keys %{ $$workload_ref{$metric_class} }) {
+				my %aggregate_dataset; # a new dataset for aggregated results
+				$aggregate_dataset{get_label('description_label')} = $$workload_ref{$metric_class}{$metric_type}[0]{get_label('description_label')};
+				$aggregate_dataset{get_label('role_label')} = "aggregate";
+				$aggregate_dataset{get_label('client_hostname_label')} = "all";
+				$aggregate_dataset{get_label('server_hostname_label')} = "all";
+				$aggregate_dataset{get_label('server_port_label')} = "all";
+				$aggregate_dataset{get_label('uid_label')} = create_uid('client_hostname_label', 'server_hostname_label', 'server_port_label', 'server_port_label');
+				# use the same timstamps from the first data
+				my @ref_timestamps = get_timestamps(\@{ $$workload_ref{$metric_class}{$metric_type}[0]{get_label('timeseries_label')}});
+				my @aggregate_samples;
+				# our new timeseries array for aggregate starts off with 0s
+				foreach my $timestamp_ms (@ref_timestamps) {
+					my %aggregate_sample = ( get_label('date_label') => int $timestamp_ms, get_label('value_label') => 0);
+					push(@aggregate_samples, \%aggregate_sample);
+				}
+				# And now we add the values from each per server result to that hash one at a time
+				my $i;
+				for ($i=0; $i < scalar @{ $$workload_ref{$metric_class}{$metric_type} }; $i++) {
+					calc_sum_series(\@{ $$workload_ref{$metric_class}{$metric_type}[$i]{get_label('timeseries_label')} }, \@aggregate_samples);
+				}
+				if ( $metric_class eq 'latency' ) {
+					div_series(\@aggregate_samples, $i);
+				}
+				$aggregate_dataset{get_label('value_label')} = get_mean(\@aggregate_samples);
+				$aggregate_dataset{get_label('timeseries_label')} = \@aggregate_samples;
+				# The aggregate data should be the first in the array
+				unshift(@{ $$workload_ref{$metric_class}{$metric_type} }, \%aggregate_dataset);
 			}
-			# And now we add the values from each per server result to that hash one at a time
-			my $i;
-			for ($i=0; $i < scalar @{ $$workload_ref{$metric_class}{$metric_type} }; $i++) {
-				calc_sum_series(\@{ $$workload_ref{$metric_class}{$metric_type}[$i]{$timeseries_label} }, \@aggregate_samples);
-			}
-			if ( $metric_class eq 'latency' ) {
-				div_series(\@aggregate_samples, $i);
-			}
-			$aggregate_dataset{$value_label} = get_mean(\@aggregate_samples);
-			$aggregate_dataset{$timeseries_label} = \@aggregate_samples;
-			# The aggregate data should be the first in the array
-			unshift(@{ $$workload_ref{$metric_class}{$metric_type} }, \%aggregate_dataset);
 		}
 	}
 }
@@ -413,20 +448,26 @@ sub calc_efficiency_metrics {
 	my $workload_ref = $params;
 
 	my $resource_metric_name;
-	foreach $resource_metric_name (keys $$workload_ref{'resource'}) {
-		for (my $i = 0; $i < scalar @{ $$workload_ref{'resource'}{$resource_metric_name} }; $i++) { # cpu_busy[$i]
-			foreach my $throughput_metric_name (keys $$workload_ref{'throughput'} ) { # Gb-sec, trans_sec
-				for (my $j = 0; $j < scalar @{ $$workload_ref{'throughput'}{$throughput_metric_name} }; $j++) { # Gb_sec[$i], trans_sec[$i]
-					if ( $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{$client_hostname_label} eq $$workload_ref{'resource'}{$resource_metric_name}[$i]{$hostname_label} ) {
-						my $eff_metric_name = $throughput_metric_name . "/" . $resource_metric_name;
-						my %eff_dataset; # a new dataset for throughput/resource
-						$eff_dataset{$description_label} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{$description_label} . " divided-by " . $$workload_ref{'resource'}{$resource_metric_name}[$i]{$description_label};
-						my @eff_samples;
-						# And now we calculate a ratio
-						if ( calc_ratio_series(\@{ $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{$timeseries_label} }, \@{ $$workload_ref{'resource'}{$resource_metric_name}[$i]{$timeseries_label} }, \@eff_samples) == 0) {
-							$eff_dataset{$timeseries_label} = \@eff_samples;
+	if ($$workload_ref{'resource'} and $$workload_ref{'throughput'}) {
+		foreach $resource_metric_name (keys $$workload_ref{'resource'}) {
+			for (my $i = 0; $i < scalar @{ $$workload_ref{'resource'}{$resource_metric_name} }; $i++) { # cpu_busy[$i]
+				foreach my $throughput_metric_name (keys $$workload_ref{'throughput'} ) { # Gb-sec, trans_sec
+					for (my $j = 0; $j < scalar @{ $$workload_ref{'throughput'}{$throughput_metric_name} }; $j++) { # Gb_sec[$i], trans_sec[$i]
+						if ( $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('client_hostname_label')} eq $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('hostname_label')} ) {
+							my $eff_metric_name = $throughput_metric_name . "/" . $resource_metric_name;
+							my %eff_dataset; # a new dataset for throughput/resource
+							foreach my $label ('client_hostname_label', 'server_hostname_label', 'server_port_label') {
+								$eff_dataset{get_label($label)} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label($label)};
+							}
+							$eff_dataset{get_label('description_label')} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('description_label')} . " divided-by " . $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('description_label')};
+							$eff_dataset{get_label('uid_label')} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('uid_label')} . "/" . $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('uid_label')};
+							my @eff_samples;
+							# And now we calculate a ratio
+							calc_ratio_series(\@{ $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('timeseries_label')} }, \@{ $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('timeseries_label')} }, \@eff_samples);
+							$eff_dataset{get_label('value_label')} = get_mean(\@eff_samples);
+							$eff_dataset{get_label('timeseries_label')} = \@eff_samples;
+							unshift(@{ $$workload_ref{'efficiency'}{$eff_metric_name} }, \%eff_dataset);
 						}
-						unshift(@{ $$workload_ref{'efficiency'}{$eff_metric_name} }, \%eff_dataset);
 					}
 				}
 			}
