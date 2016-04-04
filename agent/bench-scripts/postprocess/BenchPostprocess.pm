@@ -46,7 +46,7 @@ sub get_label {
 			'mean_label' => 'mean',
 			'stddev_label' => 'stddev',
 			'stddevpct_label' => 'stddevpct',
-			'closest_sample_label' => 'closest_sample',	
+			'closest_sample_label' => 'closest sample',	
 			'samples_label' => 'samples');
 	if ( $labels{$key} ) {
 		return $labels{$key}
@@ -410,10 +410,10 @@ sub div_series {
 sub calc_aggregate_metrics {
 	my $workload_ref = shift;
 
-	if ($$workload_ref{'throughput'} and $$workload_ref{'latency'}) {
-		# process any data in %workload{'throughput'|'latency'}, aggregating various per-client results
-		my $metric_class;
-		foreach $metric_class ('throughput', 'latency') {
+	# process any data in %workload{'throughput'|'latency'}, aggregating various per-client results
+	my $metric_class;
+	foreach $metric_class ('throughput', 'latency') {
+		if ($$workload_ref{$metric_class}) {
 			my $metric_type;
 			foreach $metric_type (keys %{ $$workload_ref{$metric_class} }) {
 				my %aggregate_dataset; # a new dataset for aggregated results
@@ -463,6 +463,9 @@ sub calc_efficiency_metrics {
 							my %eff_dataset; # a new dataset for throughput/resource
 							foreach my $label ('client_hostname_label', 'server_hostname_label', 'server_port_label') {
 								$eff_dataset{get_label($label)} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label($label)};
+							}
+							foreach my $label ('hostname_label') {
+								$eff_dataset{get_label($label)} = $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label($label)};
 							}
 							$eff_dataset{get_label('description_label')} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('description_label')} . " divided-by " . $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('description_label')};
 							$eff_dataset{get_label('uid_label')} = $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('uid_label')} . "/" . $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('uid_label')};
