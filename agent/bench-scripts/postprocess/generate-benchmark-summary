@@ -78,7 +78,7 @@ foreach $dir (sort @dirs) {
                         }
                 close TXT;
                 my $perl_scalar = from_json( $json_text );
-		my %iteration = ( $iteration_number_field => $iter_num, $iteration_name_field => $iter_name, $iteration_data_field => $perl_scalar );
+		my %iteration = ( $iteration_number_field => int $iter_num, $iteration_name_field => $iter_name, $iteration_data_field => $perl_scalar );
                 push @iterations, \%iteration;
 	}
 }
