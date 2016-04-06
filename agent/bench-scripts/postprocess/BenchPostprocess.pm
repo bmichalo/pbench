@@ -47,7 +47,10 @@ sub get_label {
 			'stddev_label' => 'stddev',
 			'stddevpct_label' => 'stddevpct',
 			'closest_sample_label' => 'closest sample',	
-			'samples_label' => 'samples');
+			'samples_label' => 'samples',
+			'primary_metric_label' => 'primary_metric',
+			'max_stddevpct_label' => 'max_stddevpct',
+			'max_failures_label' => 'max_failures' );
 	if ( $labels{$key} ) {
 		return $labels{$key}
 	} else {
