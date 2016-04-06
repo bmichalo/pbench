@@ -272,7 +272,11 @@ foreach my $metric_name (keys %iteration) {
 					 $iteration{$metric_name}{$metric_type}[$i]{get_label('stddev_label')},
 					 $iteration{$metric_name}{$metric_type}[$i]{get_label('stddevpct_label')},
 					 $iteration{$metric_name}{$metric_type}[$i]{get_label('closest_sample_label')}) = get_avg_stddev(@{$iteration{$metric_name}{$metric_type}[$i]{get_label('samples_label')}});
-					if ($metric_name eq "throughput" && $metric_type eq $primary_metric && $iteration{$metric_name}{$metric_type}[$i]{get_label('stddevpct_label')} > $max_stddevpct) {
+					if ($iteration{$metric_name}{$metric_type}[$i]{get_label('role_label')} and
+						$iteration{$metric_name}{$metric_type}[$i]{get_label('role_label')} eq 'aggregate' and
+						$metric_name eq "throughput" and
+						$metric_type eq $primary_metric and
+						$iteration{$metric_name}{$metric_type}[$i]{get_label('stddevpct_label')} > $max_stddevpct) {
 						$fail = 1;
 					}
 				}
@@ -280,9 +284,13 @@ foreach my $metric_name (keys %iteration) {
 		}
 	}
 }
+# Add the benchmark parameters which are used for mulitple samples
+$iteration{'parameters'}{'benchmark'}[0]{get_label('max_stddevpct_label')} = 1.0 * $max_stddevpct;
+
+# Link reference result
 if ( $iteration{'throughput'}{$primary_metric} ) {
 	for (my $sample_num = 1; $sample_num < scalar @{$iteration{'throughput'}{$primary_metric}[0]{get_label('samples_label')}} + 1; $sample_num++) {
-		if ($sample_num == $iteration{'throughput'}{$primary_metric}[0]{'closest_sample'}) {
+		if ($iteration{'throughput'}{$primary_metric}[0]{'closest_sample'} and $sample_num == $iteration{'throughput'}{$primary_metric}[0]{'closest_sample'}) {
 			# use "reference-result" to point to result which is closest to the average
 			system("rm -rf $dir/reference-result");
 			system("ln -sf sample$sample_num $dir/reference-result");
@@ -297,6 +305,7 @@ if ( $iteration{'throughput'}{$primary_metric} ) {
 	}
 }
 
+# Finally write the data in JSON
 my $json_file = $dir . "/result.json";
 my $json_text   = to_json( \%iteration, { ascii => 1, pretty => 1 } );
 open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
