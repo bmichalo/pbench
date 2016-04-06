@@ -13,7 +13,7 @@ use Exporter qw(import);
 use List::Util qw(max);
 use Data::Dumper;
 
-our @EXPORT_OK = qw(get_label create_uid get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
+our @EXPORT_OK = qw(get_label create_uid get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics create_graph_hash);
 
 my $script = "BenchPostprocess";
 
@@ -173,18 +173,18 @@ sub write_influxdb_line_protocol {
 	my $file_name = $dir . "/" . $measurement . ".txt";
 	if (open(INFLUXDB, ">>$file_name")) {
 		my $timestamp;
-		foreach $timestamp (keys $$data_ref{'timeseries'} ) {
+		foreach $timestamp (keys $$data_ref{get_label('timeseries_label')} ) {
 			my $this_key;
 			my $id_string = $measurement;
 			foreach $this_key (keys %{ $data_ref}) {
-				if ( $this_key ne "timeseries" && $this_key ne "uid" && $this_key ne "value" && $this_key ne "description" && $$data_ref{$this_key}) {
+				if ( $this_key ne get_label('timeseries_label') && $this_key ne "uid" && $this_key ne "value" && $this_key ne "description" && $$data_ref{$this_key}) {
 					my $value = $$data_ref{$this_key};
 					$value =~ s/\s/\\ /g;
 					$id_string = $id_string . "," . $this_key . "=" . $value;
 				}
 			}
 		my $timestamp_ns = $timestamp * 1000000;
-		my $value = $$data_ref{'timeseries'}{$timestamp};
+		my $value = $$data_ref{get_label('timeseries_label')}{$timestamp};
 		printf INFLUXDB "%s value=%f %d\n", $id_string, $value, $timestamp_ns;
 		}
 		close(INFLUXDB);
@@ -479,6 +479,28 @@ sub calc_efficiency_metrics {
 							$eff_dataset{get_label('timeseries_label')} = \@eff_samples;
 							unshift(@{ $$workload_ref{'efficiency'}{$eff_metric_name} }, \%eff_dataset);
 						}
+					}
+				}
+			}
+		}
+	}
+}
+
+sub create_graph_hash {
+	my $graph_ref = shift; # new data goes into this hash
+	my $workload_ref = shift; # points to a %workload
+	my $html_name = $$workload_ref{'parameters'}{'benchmark'}[0]{get_label('benchmark_name_label')};
+	foreach my $metric_type ('throughput', 'latency', 'resource', 'efficiency') {
+		foreach my $metric_name (keys $$workload_ref{$metric_type} ) {
+			for (my $i = 0; $i < scalar @{ $$workload_ref{$metric_type}{$metric_name} }; $i++) {
+				my $series_name = get_uid($$workload_ref{$metric_type}{$metric_name}[$i]{get_label('uid_label')}, \%{ $$workload_ref{$metric_type}{$metric_name}[$i] }); 
+				for (my $j = 0; $j < scalar @{ $$workload_ref{$metric_type}{$metric_name}[$i]{get_label('timeseries_label')} }; $j++ ) {
+					my $timestamp_ms = $$workload_ref{$metric_type}{$metric_name}[$i]{get_label('timeseries_label')}[$j]{get_label('date_label')};
+					if ($timestamp_ms) {
+						my $value = $$workload_ref{$metric_type}{$metric_name}[$i]{get_label('timeseries_label')}[$j]{get_label('value_label')};
+						my $graph_name = $metric_name;
+						$graph_name =~ s/\//_per_/g;
+						$$graph_ref{$html_name}{$graph_name}{$series_name}{$timestamp_ms} = $value;
 					}
 				}
 			}
