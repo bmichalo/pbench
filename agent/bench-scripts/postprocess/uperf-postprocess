@@ -56,11 +56,11 @@ my $timestamp_ms_diff;
 my $line;
 my %avg;
 my %total;
-my $uperf_primary_metric;
+my $primary_metric;
 if ($test_type =~ /rr/) {
-	$uperf_primary_metric="trans_sec";
+	$primary_metric="trans_sec";
 } else {
-	$uperf_primary_metric="Gb_sec";
+	$primary_metric="Gb_sec";
 }
 # %workload
 #		   {Throughput|Latency|Resource|Efficiency}
@@ -110,6 +110,7 @@ my %benchmark_parameters_dataset = ( 	get_label('benchmark_name_label') => $benc
 					get_label('instances_label') => $instances,
 					get_label('clients_label') => $clients,
 					get_label('servers_label') => $servers,
+					get_label('primary_metric_label') => $primary_metric,
 					get_label('uid_label') => create_uid('benchmark_name_label', 'controller_host_label')  );
 
 push(@benchmark, \%benchmark_parameters_dataset);
