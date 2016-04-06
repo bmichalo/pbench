@@ -477,7 +477,9 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 							echo "Restarting iteration $iteration ($count of $total_iterations)"
 							log "Restarting iteration $iteration ($count of $total_iterations)"
 						fi
-						mkdir -p $iteration_dir
+						if [ $postprocess_only == "n" ]; then
+							mkdir -p $iteration_dir
+						fi
 						# each attempt at a test config requires multiple samples to get stddev
 						for sample in `seq 1 $nr_samples`; do
 							benchmark_results_dir="$iteration_dir/sample$sample"
@@ -611,7 +613,13 @@ for protocol in `echo $protocols | sed -e s/,/" "/g`; do
 									fi
 									((server_nr++))
 								done
-							else
+							else # only postprocessing
+								let fail_num=$failures+1
+								set -x
+								if [ ! -e $iteration_dir -a -e $iteration_dir-fail$fail_num ]; then
+									mv $iteration_dir-fail$fail_num $iteration_dir
+								fi
+								set +x
 								pushd $iteration_dir >/dev/null
 								if [ ! -e sample$sample -a -e sample$sample.tar.xz ]; then
 									tar Jxf sample$sample.tar.xz && /bin/rm -rf sample$sample.tar.xz
