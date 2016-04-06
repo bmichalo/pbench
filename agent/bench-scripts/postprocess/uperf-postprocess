@@ -49,7 +49,6 @@ my $tool_group = $ARGV[8];
 my $benchmark_version = $ARGV[9];
 my $benchmark_name = 'uperf';
 my %uperf_sample;
-my %uperf_rate;
 my $timestamp_ms = 0;
 my $prev_timestamp_ms = 0;
 my $timestamp_ms_diff;
@@ -150,7 +149,6 @@ foreach $this_tool_dir (keys %tool_ids) {
 		my $mean = get_mean(\@cpubusy_samples);
 		%this_cpubusy_dataset = ( get_label('uid_label') => create_uid('hostname_label'), get_label('description_label') => $description, get_label('role_label') => $role, get_label('hostname_label') => $hostname, get_label('value_label') => $mean, get_label('timeseries_label') => \@cpubusy_samples );
 		push(@cpu_busy, \%this_cpubusy_dataset);
-		#write_influxdb_line_protocol("cpubusy", $influx_dir, \%this_cpubusy_dataset);
 	}
 }
 if ( @cpu_busy ) {
@@ -177,18 +175,10 @@ foreach $result_file ( readdir($dh) ) {
 		my $client_hostname = $1;
 		my $server_hostname = $2;
 		my $server_port = int $3;
-		my $identifier = "client::" . $client_hostname . "-server::" . $server_hostname . ":" . $server_port;
 		my $role = "client";
 		my $average;
 		my @throughput_samples;
 		my @latency_samples;
-
-		my $this_nr_bytes_label = "bytes-" . $identifier; # a number of bytes (not a througput metric)
-		my $this_nr_ops_label = "ops-" . $identifier; # a number of operations
-		my $this_tput_label = "Gb_sec-_" . $identifier; # a number of bytes over time
-		my $this_opssec_label = "ops_sec-" . $identifier; # a number of operations over time
-		my $this_transsec_label = "trans_sec-" . $identifier; # a number of transactions over time
-		my $this_lat_label = "usec-" . $identifier; # a time period
 		open(IN_FILE, "$dir/$result_file") || die "$script: could not open file $dir/$result_file: $!\n";
 		$prev_timestamp_ms = 0;
 		while (<IN_FILE>) {
@@ -201,32 +191,28 @@ foreach $result_file ( readdir($dh) ) {
 				$timestamp_ms = $1;
 				my $bytes = $2;
 				my $ops = $3;
-				$uperf_sample{$this_nr_ops_label}{$timestamp_ms} = $ops;
-				$uperf_sample{$this_nr_bytes_label}{$timestamp_ms} = $bytes;
+				$uperf_sample{'ops'}{$timestamp_ms} = $ops;
+				$uperf_sample{'bytes'}{$timestamp_ms} = $bytes;
 				if ( $prev_timestamp_ms != 0 ) {
 	 				my $timestamp_s_diff = ($timestamp_ms - $prev_timestamp_ms)/1000;
-					my $nr_bytes_diff = $uperf_sample{$this_nr_bytes_label}{$timestamp_ms} - $uperf_sample{$this_nr_bytes_label}{$prev_timestamp_ms};
-					my $nr_ops_diff = $uperf_sample{$this_nr_ops_label}{$timestamp_ms} - $uperf_sample{$this_nr_ops_label}{$prev_timestamp_ms};
+					my $nr_bytes_diff = $uperf_sample{'bytes'}{$timestamp_ms} - $uperf_sample{'bytes'}{$prev_timestamp_ms};
+					my $nr_ops_diff = $uperf_sample{'ops'}{$timestamp_ms} - $uperf_sample{'ops'}{$prev_timestamp_ms};
 					# This is what we are really interested in: computing value/sec metrics like Gb/sec and ops/sec
 					# We can do that once we have more than one sample
 					if ($test_type =~ /rr/) {
 						my $ops_sec = $nr_ops_diff /$timestamp_s_diff;
 						my $trans_sec = $ops_sec /2;
 						# for request-response, 1 transaction is two ops, a write and a read.
-						$uperf_rate{"uperf"}{"Throughput"}{$this_transsec_label}{$timestamp_ms} = $ops_sec /2;
 						# the latency is the full round trip for 1 transaction, which is also = ($instances / trans_sec)
 						# if --log-response-times in pbench_uperf is used, the write and read latency can be computed (later).
 						if ( $nr_ops_diff != 0) {
-							$uperf_rate{"uperf"}{"Latency"}{$this_lat_label}{$timestamp_ms} = $instances /$trans_sec *1000000;
 							my %latency_sample = ( get_label('date_label') => int $timestamp_ms, get_label('value_label') => $instances /$trans_sec *1000000);
 							push(@latency_samples, \%latency_sample);
 						}
-						#my %throughput_sample = (get_label('date_value') => int $timestamp_ms, get_label('value_label') => $trans_sec);
 						my %throughput_sample = (get_label('date_label') => int $timestamp_ms, get_label('value_label') => $trans_sec);
 						push(@throughput_samples, \%throughput_sample);
 					} else {
 						my $bytes_sec = $nr_bytes_diff /$timestamp_s_diff;
-						$uperf_rate{"uperf"}{"Throughput"}{$this_tput_label}{$timestamp_ms} = $nr_bytes_diff *8 /1000000000 /$timestamp_s_diff;
 						my %throughput_sample = (get_label('date_label') => int $timestamp_ms, get_label('value_label') => ($nr_bytes_diff *8 /1000000000 /$timestamp_s_diff));
 						push(@throughput_samples, \%throughput_sample);
 					}
@@ -333,7 +319,6 @@ foreach my $resp_file ( readdir($dh) ) {
 			#  35609 140172276365056  0 1408072771750861084           42765
 			$line =~ /\s*\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/;
 			$time_ns = $1;
-			# print "time_ns: $time_ns\n";
 			$time_us = $time_ns / 1000;
 			if ($resp_type eq "write") {
 				$write_time = $time_us;
@@ -390,18 +375,6 @@ if ($nr_resp_files > 0) {
 
 calc_aggregate_metrics(\%workload);
 calc_efficiency_metrics(\%workload);
-
-# define the graph types
-# if you want something other than lineChart, put it here
-my %graph_type;
-
-# threshold for displying a series in a graph
-my %graph_threshold;
-
-# N.B. Final parameter of 1 tells gen_data to do the expensive
-# combinatorial check of timestamps. uperf-postprocess is the
-# only script that makes use of it.
-gen_data(\%uperf_rate, \%graph_type, \%graph_threshold, $dir, 1);
 
 # write to JSON format file
 my $json_file = $dir . "/result.json";
