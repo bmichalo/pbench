@@ -22,7 +22,7 @@ use lib "$_test_alt_tools_lib";
 use lib "$_test_alt_bench_lib";
 no lib ".";
 use GenData qw(gen_data);
-use BenchPostprocess qw(get_label create_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics);
+use BenchPostprocess qw(get_label create_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics create_graph_hash);
 use File::Basename;
 use Data::Dumper;
 use List::Util('sum');
@@ -280,7 +280,29 @@ if ( %resource ) {
 if ( %parameters ) {
 	$workload{'parameters'} = \%parameters;
 }
+
+calc_aggregate_metrics(\%workload);
+calc_efficiency_metrics(\%workload);
 		
+# pbnch graphing uses a specific hash heirarchy, where the dimentions of the hash are:
+# {html-file}{html-graph}{graph-series}{timeseries-data}
+# for example, an html page which has all of the Gb_sec metrics graphed may look like:
+# %throuhgput{'uperf-throughput'}{'Gb-per-second'}{client:host1-to-server-host2}{$timestamp_ms}
+#                                                 {client:host1-to-server-host3}{$timestamp_ms}
+# if we wanted another graph for transactions per second graped in a different graph, but on the same html page, we would add:
+# %throuhgput{'uperf-throughput'}{'transper-second'}{client:host1-to-server-host2}{$timestamp_ms}
+#                                                   {client:host1-to-server-host3}{$timestamp_ms}
+#
+# So, for uperf, we need to take parts of the data in %workload and transform it in to a new hash
+# The %workload hash has much more information about the workload than needed for graphing, 
+# and the timestamp data is stored in a different way.  So, we just need to do a minor 
+# conversion, provided by BenchPostprocess.pm
+
+my %uperf_graph;
+create_graph_hash(\%uperf_graph, \%workload);
+my %graph_threshold;
+my %graph_type;
+gen_data(\%uperf_graph, \%graph_type, \%graph_threshold, $dir, 1);
 
 # if there is a request-response test , and there is a log of the response times, process it.
 my $all_server_write_avg_time;
@@ -373,8 +395,6 @@ if ($nr_resp_files > 0) {
 	$total{"read_latency_us"} = $all_server_read_avg_time;
 }
 
-calc_aggregate_metrics(\%workload);
-calc_efficiency_metrics(\%workload);
 
 # write to JSON format file
 my $json_file = $dir . "/result.json";
