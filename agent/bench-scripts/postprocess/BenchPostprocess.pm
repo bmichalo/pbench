@@ -491,6 +491,7 @@ sub create_graph_hash {
 	my $workload_ref = shift; # points to a %workload
 	my $html_name = $$workload_ref{'parameters'}{'benchmark'}[0]{get_label('benchmark_name_label')};
 	foreach my $metric_type ('throughput', 'latency', 'resource', 'efficiency') {
+		if ($$workload_ref{$metric_type}) {
 		foreach my $metric_name (keys $$workload_ref{$metric_type} ) {
 			for (my $i = 0; $i < scalar @{ $$workload_ref{$metric_type}{$metric_name} }; $i++) {
 				my $series_name = get_uid($$workload_ref{$metric_type}{$metric_name}[$i]{get_label('uid_label')}, \%{ $$workload_ref{$metric_type}{$metric_name}[$i] }); 
@@ -504,6 +505,7 @@ sub create_graph_hash {
 					}
 				}
 			}
+		}
 		}
 	}
 }
