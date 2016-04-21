@@ -94,8 +94,9 @@ sub mean {
 my $script = basename($0);
 my $dir = $ARGV[0];
 my $test = $ARGV[1];
-my $tool_label_pattern = $ARGV[2];
-my $tool_group = $ARGV[3];
+my $test_type = $ARGV[2];
+my $tool_label_pattern = $ARGV[3];
+my $tool_group = $ARGV[4];
 my %uperf_sample;
 my %uperf_rate;
 my $timestamp_ms = 0;
@@ -124,6 +125,7 @@ my $loss_pct;
 my $start_rate; 
 my $frame_size;
 my $run_bidirec;
+my $latency_run_time;
 my $search_run_time;
 my $validation_run_time;
 my $acceptable_loss_pct;
@@ -138,8 +140,6 @@ while ( <TXT> ) {
 		$loss_pct = $4;
 		$loss = $3;
 	}
-	# [PARAMETERS] rate: 14.88 frameSize: 64 runBidirec: false searchRunTime: 60  validationRunTime: 120 acceptableLossPct: 0  ports: {0,1}
-	# [PARAMETERS] rate: 4 frameSize: 64 runBidirec: false searchRunTime: 60 validationRunTime: 60 acceptableLossPct: 1 ports: 1,2
 	# [PARAMETERS] startRate: 5 frameSize: 256 runBidirec: true searchRunTime: 60 validationRunTime: 60 acceptableLossPct: 1 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\sframeSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+searchRunTime:\s+(\d+)\s+validationRunTime:\s+(\d+)\s+acceptableLossPct:\s+(\d+[\.\d+]*)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
 		printf "found parameters\n";
@@ -150,19 +150,38 @@ while ( <TXT> ) {
 		$validation_run_time = $5;
 		$acceptable_loss_pct = $6;
 		$port_list = $7;
+		push(@benchmark, { 'name' => "MoonGen",
+				   'description' => "Test parameters for MoonGen",
+				   'role' => "packet-generator",
+				   'uid' => "benchmark:%name%",
+				   'start_rate' => "$start_rate",
+				   'frame_size' => "$frame_size",
+				   'run_bidirec' => "$run_bidirec",
+				   'search_run_time' => "$search_run_time",
+				   'validation_run_time' => "$validation_run_time",
+				   'acceptable_loss_pct' => "$acceptable_loss_pct",
+				   'port_list' => "$port_list" } );
+	}
+	# [PARAMETERS] startRate: 4.000000 frameSize: 64 runBidirec: false latencyRunTime: 15 ports: 1,2
+	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\sframeSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+latencyRunTime:\s+(\d+)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
+		printf "found parameters\n";
+		$start_rate = $1;
+		$frame_size = $2;
+		$run_bidirec = $3;
+		$latency_run_time = $4;
+		$port_list = $5;
+		push(@benchmark, { 'name' => "MoonGen",
+				   'description' => "Test parameters for MoonGen",
+				   'role' => "packet-generator",
+				   'uid' => "benchmark:%name%",
+				   'start_rate' => "$start_rate",
+				   'frame_size' => "$frame_size",
+				   'run_bidirec' => "$run_bidirec",
+				   'search_run_time' => "$latency_run_time",
+				   'port_list' => "$port_list" } );
 	}
 }
 close TXT;
-push(@benchmark, { 'name' => "MoonGen",
-		   'description' => "Test parameters for MoonGen",
-		   'role' => "packet-generator",
-		   'start_rate' => "$start_rate",
-		   'frame_size' => "$frame_size",
-		   'run_bidirec' => "$run_bidirec",
-		   'search_run_time' => "$search_run_time",
-		   'validation_run_time' => "$validation_run_time",
-		   'acceptable_loss_pct' => "$acceptable_loss_pct",
-		   'port_list' => "$port_list" } );
 push(@Mframes_sec, { 'description' => "The number of Ethernet frames (in millions) received per second",
 		     'uid' => "port:%port%",
 		     'port' => "all",
