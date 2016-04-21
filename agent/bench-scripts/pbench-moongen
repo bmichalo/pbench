@@ -36,14 +36,15 @@ benchmark_bin=/usr/local/bin/$benchmark_name
 # Defaults
 cfg_file="opnfv-vsperf-cfg.lua"
 benchmark_run_dir=""
-test_types="unidirec"
+test_type="throughput"
+traffic="unidirec"
 max_drop_pcts="0"
 start_rate_mpps=""
 frame_sizes="64,256,512,1024,1480" # in bytes
 frame_sizes="64" # in bytes
 config=""
 nr_flows="1024"
-ur_samples=5
+nr_samples=5
 maxstddevpct=5 # maximum allowable standard deviation in percent
 max_failures=6 # after N failed attempts to hit below $maxstddevpct, move on to the nest test
 search_runtime=60
@@ -60,7 +61,7 @@ tool_label_pattern="$benchmark_name-"
 install_only="n"
 
 # Process options and arguments
-opts=$(getopt -q -o i:c:t:r:m:p:M:S:C: --longoptions "portlist:,start-rate-mpps:,max-drop-pct:,max-drop-pcts:,client-label:,server-label:,tool-label-pattern:,install,start-iteration-num:,config:,nr-flows:,test-types:,search-runtime:,validation-runtime:,frame-sizes:,samples:,client:,clients:,servers:,server:,max-stddev:,max-failures:,log-response-times:,postprocess-only:,run-dir:,tool-group:" -n "getopt.sh" -- "$@")
+opts=$(getopt -q -o i:c:t:r:m:p:M:S:C: --longoptions "portlist:,rate:,max-drop-pct:,max-drop-pcts:,client-label:,server-label:,tool-label-pattern:,install,start-iteration-num:,config:,nr-flows:,test-type:,traffic:,latency-runtime:,search-runtime:,validation-runtime:,frame-sizes:,samples:,client:,clients:,servers:,server:,max-stddev:,max-failures:,log-response-times:,postprocess-only:,run-dir:,tool-group:" -n "getopt.sh" -- "$@")
 if [ $? -ne 0 ]; then
 	printf -- "$*\n"
 	printf "\n"
@@ -68,13 +69,14 @@ if [ $? -ne 0 ]; then
 	printf "\tThe following options are available:\n\n"
 	#              1   2         3         4         5         6         7         8         9         0         1         2         3
 	#              678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
-	printf -- "\t\t             --kvm-host=str\n"
-	printf -- "\t\t             --tool-group=str\n"
 	printf -- "\t\t-c str       --config=str               name of the test config (i.e. jumbo_frames_and_network_throughput)\n"
+	printf -- "\t\t-r float     --rate	               rate in millions of packets/sec\n"
 	printf -- "\t\t             --portlist=int,int[,int,int]  list of DPDK ports to use (multiples of 2)\n"
-	printf -- "\t\t-t str[,str] --test-types=str[,str]     list of one or more: unidirec or bidirec (default $test_types)\n"
-	printf -- "\t\t-r int       --search-runtime=int       test measurement period in seconds when searching for max throughput (default is $search-runtime)\n"
-	printf -- "\t\t-r int       --validation-runtime=int   test measurement period in seconds when running final validation (default is $validation-runtime)\n"
+	printf -- "\t\t-t str[,str] --test-type=str            throughput or latency (default $test_type)\n"
+	printf -- "\t\t-t str[,str] --traffic=str[,str]        list of one or more: unidirec or bidirec (default $traffic)\n"
+	printf -- "\t\t-r int       --latency-runtime=int      test measurement period in seconds when running a latency test (default is $latency_runtime)\n"
+	printf -- "\t\t-r int       --search-runtime=int       test measurement period in seconds when searching for max throughput (default is $search_runtime)\n"
+	printf -- "\t\t-r int       --validation-runtime=int   test measurement period in seconds when running final validation (default is $validation_runtime)\n"
 	printf -- "\t\t             --max-drop-pct[s]=fl,[fl]  list of maximum allowed percentage of dropped frames (default is $max_drop_pcts)\n"
 	printf -- "\t\t-m int[,int] --frame-sizes=str[,str]    list of frame sizes in bytes (default is $frame_sizes)\n"
 	printf -- "\t\t-i int[,int] --nr-flows=int[,int]       list of number of packet flows to run (default is $nr_flows)\n"
@@ -86,7 +88,6 @@ if [ $? -ne 0 ]; then
 	printf -- "\t\t             --run-dir=str              optionally specify what directory should be used (usually only used\n"
 	printf    "\t\t                                        if postprocess-only=y)\n"
 	printf -- "\t\t             --start-iteration-num=int  optionally skip the first (n-1) tests\n"
-	printf -- "\t\t             --log-response-times=y|n   record the response time of every single operation\n"
 	printf -- "\t\t             --tool-label-pattern=str   $benchmark_name will provide CPU and efficiency information for any tool directory\n"
 	printf    "\t\t                                        with a \"^<pattern>\" in the name, provided \"sar\" is one of the\n"
 	printf    "\t\t                                        registered tools.\n"
@@ -97,6 +98,7 @@ if [ $? -ne 0 ]; then
 	printf    "\t\t                                        prefix.  if you don't want to register your tools with \"$benchmark_name-\" as\n"
 	printf    "\t\t                                        part of the label, just use --tool-label-pattern= to tell this script\n"
 	printf    "\t\t                                        the prefix pattern to use for CPU information.\n"
+	printf -- "\t\t             --tool-group=str\n"
 	exit 1
 fi
 eval set -- "$opts"
@@ -157,7 +159,7 @@ while true; do
 			shift
 		fi
 		;;
-		-r|--start-rate-mpps)
+		-r|--rate)
 		shift
 		if [ -n "$1" ]; then
 			start_rate_mpps="$1"
@@ -171,10 +173,17 @@ while true; do
 			shift
 		fi
 		;;
-		-t|--test-types)
+		--traffic)
 		shift
 		if [ -n "$1" ]; then
-			test_types="$1"
+			traffic="$1"
+			shift
+		fi
+		;;
+		-t|--test-type)
+		shift
+		if [ -n "$1" ]; then
+			test_type="$1"
 			shift
 		fi
 		;;
@@ -192,24 +201,24 @@ while true; do
 			shift
 		fi
 		;;
-		-r|--search-runtime)
+		--latency-runtime)
+		shift
+		if [ -n "$1" ]; then
+			latency_runtime="$1"
+			shift
+		fi
+		;;
+		--search-runtime)
 		shift
 		if [ -n "$1" ]; then
 			search_runtime="$1"
 			shift
 		fi
 		;;
-		-r|--validation-runtime)
+		--validation-runtime)
 		shift
 		if [ -n "$1" ]; then
 			validation_runtime="$1"
-			shift
-		fi
-		;;
-		--log-response-times)
-		shift
-		if [ -n "$1" ]; then
-			log_response_times="$1"
 			shift
 		fi
 		;;
@@ -257,7 +266,7 @@ fi
 mkdir -p $benchmark_run_dir/.running
 
 total_iterations=0
-for test_type in `echo $test_types | sed -e s/,/" "/g`; do
+for traffic_direction in `echo $traffic | sed -e s/,/" "/g`; do
 	for max_drop_pct in `echo $max_drop_pcts | sed -e s/,/" "/g`; do
 		for frame_size in `echo $frame_sizes | sed -e s/,/" "/g`; do
 			for nr_flow in `echo $nr_flows | sed -e s/,/" "/g`; do
@@ -271,12 +280,12 @@ mkdir -p $benchmark_run_dir/.running
 export benchmark_name config
 pbench-collect-sysinfo --group=$tool_group --dir=$benchmark_run_dir beg
 # start the server processes
-for test_type in `echo $test_types | sed -e s/,/" "/g`; do
+for traffic_direction in `echo $traffic | sed -e s/,/" "/g`; do
 	for max_drop_pct in `echo $max_drop_pcts | sed -e s/,/" "/g`; do
 		for frame_size in `echo $frame_sizes | sed -e s/,/" "/g`; do
 			for nr_flow in `echo $nr_flows | sed -e s/,/" "/g`; do
 				if [ $count -ge $start_iteration_num ]; then
-					iteration="${count}-${test_type}-${frame_size}B-${nr_flow}flows-${max_drop_pct}pct_drop"
+					iteration="${count}-${test_type}-${traffic_direction}=${frame_size}B-${nr_flow}flows-${max_drop_pct}pct_drop"
 					iteration_dir="$benchmark_run_dir/$iteration"
 					result_stddevpct=$maxstddevpct # this test case will get a "do-over" if the stddev is not low enough
 					failures=0
@@ -288,44 +297,54 @@ for test_type in `echo $test_types | sed -e s/,/" "/g`; do
 							log "Restarting iteration[$iteration] ($count of $total_iterations)"
 						fi
 						mkdir -p $iteration_dir
+						if [ "$postprocess_only" != "y" ]; then
+							pushd >/dev/null $moongen_dir
+							if [ $traffic_direction == "unidirec" ]; then
+								bidirec_opt=false
+							else
+								bidirec_opt=true
+							fi
+							echo "VSPERF {" >$cfg_file
+							if [ ! -z "$start_rate_mpps" ]; then
+        							echo "startRate = $start_rate_mpps," >>$cfg_file
+							fi
+        						echo "testType = \"$test_type\"," >>$cfg_file
+        						echo "runBidirec = $bidirec_opt," >>$cfg_file
+							if [ "$test_type" == "latency" ]; then
+								echo "latencyRunTime = $latency_runtime,">>$cfg_file
+							else
+        							echo "searchRunTime = $search_runtime,">>$cfg_file
+        							echo "validationRunTime = $validation_runtime,">> $cfg_file
+        							echo "acceptableLossPct = $max_drop_pct," >>$cfg_file
+							fi
+        						echo "frameSize = $frame_size,">>$cfg_file
+        						echo "ports = {$portlist}" >>$cfg_file
+							echo "}">>$cfg_file
+							cp $cfg_file $iteration_dir/$cfg_file
+							popd >/dev/null
+						fi
 						# each attempt at a test config requires multiple samples to get stddev
 						for sample in `seq 1 $nr_samples`; do
 							benchmark_results_dir="$iteration_dir/sample$sample"
 							if [ "$postprocess_only" != "y" ]; then
+								pushd >/dev/null $moongen_dir
 								mkdir -p $benchmark_results_dir
 								echo "test sample $sample of $nr_samples"
 								log "test sample $sample of $nr_samples "
 								benchmark_client_cmd_file="$iteration_dir/$benchmark_name-client.cmd"
 								result_file=$benchmark_results_dir/moongen-result.txt
-								pushd >/dev/null $moongen_dir
-								if [ $test_type == "unidirec" ]; then
-									bidirec_opt=false
-								else
-									bidirec_opt=true
-								fi
 								# save benchmark command in file for debugging or running manually
 								
-								echo "VSPERF {" >$cfg_file
-								if [ ! -z "$start_rate_mpps" ]; then
-        								echo "startRate = $start_rate_mpps," >>$cfg_file
-								fi
-        							echo "runBidirec = $bidirec_opt," >>$cfg_file
-        							echo "searchRunTime = $search_runtime,">>$cfg_file
-        							echo "frameSize = $frame_size,">>$cfg_file
-        							echo "validationRunTime = $validation_runtime,">> $cfg_file
-        							echo "acceptableLossPct = $max_drop_pct," >>$cfg_file
-        							echo "ports = {$portlist}" >>$cfg_file
-								echo "}">>$cfg_file
-								cp $cfg_file $benchmark_results_dir/$cfg_file
 
-								echo "pushd \>/dev/null $moongen_dir" >$benchmark_client_cmd_file
+								echo "pushd >/dev/null $moongen_dir" >$benchmark_client_cmd_file
 								echo "./build/MoonGen ./examples/opnfv-vsperf.lua" >>$benchmark_client_cmd_file
-								echo "popd \>/dev/null $moongen_dir" >>$benchmark_client_cmd_file
+								echo "popd >/dev/null $moongen_dir" >>$benchmark_client_cmd_file
 								chmod +x $benchmark_client_cmd_file
 								pbench-start-tools --group=$tool_group --iteration=$iteration --dir=$benchmark_results_dir
 								$benchmark_client_cmd_file | tee $result_file
 								pbench-stop-tools --group=$tool_group --iteration=$iteration --dir=$benchmark_results_dir
 								pbench-postprocess-tools --group=$tool_group --iteration=$iteration --dir=$benchmark_results_dir
+								/bin/cp $moongen_dir/hist.csv $benchmark_results_dir
 								popd >/dev/null
 							else
 								if [[ ! -d $benchmark_results_dir ]]; then
@@ -335,7 +354,7 @@ for test_type in `echo $test_types | sed -e s/,/" "/g`; do
 								echo "Not going to run $benchmark_name.  Only postprocesing existing data"
 								log "Not going to run $benchmnark_name.  Only postprocesing existing data"
 							fi
-							$script_path/postprocess/$benchmark_name-postprocess "$benchmark_results_dir" "$iteration" "$tool_label_pattern" "$tool_group"
+							$script_path/postprocess/$benchmark_name-postprocess "$benchmark_results_dir" "$iteration" "$test_type" "$tool_label_pattern" "$tool_group"
 						done
 						$script_path/postprocess/process-iteration-samples "$iteration_dir" "Mframes_sec" "$maxstddevpct" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
 						fail=$?
