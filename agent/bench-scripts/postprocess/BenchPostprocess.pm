@@ -13,7 +13,7 @@ use Exporter qw(import);
 use List::Util qw(max);
 use Data::Dumper;
 
-our @EXPORT_OK = qw(get_label create_uid get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics create_graph_hash);
+our @EXPORT_OK = qw(trim_series get_label create_uid get_length get_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics create_graph_hash);
 
 my $script = "BenchPostprocess";
 
@@ -158,6 +158,32 @@ sub get_timestamps {
 		push(@timestamps, $$timestamp_value_ref{'date'});
 	}
 	return @timestamps = sort @timestamps;
+}
+
+sub trim_series {
+	my $array_ref = shift;
+	my $begin_trim = shift;
+	my $end_trim = shift;
+	my @timestamps = get_timestamps($array_ref);
+	my $timestamp;
+
+	if ( $begin_trim > 0 ) {
+		my $first_timestamp = shift(@timestamps);
+		$timestamp = $first_timestamp;
+		while ( ($timestamp - $first_timestamp) <= ($begin_trim * 1000) ) {
+			remove_timestamp($array_ref, $timestamp);
+			$timestamp = shift(@timestamps);
+		}
+	}
+
+	if ( $end_trim > 0 ) {
+		my $last_timestamp = pop(@timestamps);
+		$timestamp = $last_timestamp;
+		while ( ($last_timestamp - $timestamp) <= ($end_trim * 1000) ) {
+			remove_timestamp($array_ref, $timestamp);
+			$timestamp = pop(@timestamps);
+		}
+	}
 }
 
 sub write_influxdb_line_protocol {
