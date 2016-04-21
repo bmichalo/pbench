@@ -22,7 +22,7 @@ use lib "$_test_alt_tools_lib";
 use lib "$_test_alt_bench_lib";
 no lib ".";
 use GenData qw(gen_data);
-use BenchPostprocess qw(get_label create_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics create_graph_hash);
+use BenchPostprocess qw(trim_series get_label create_uid get_mean remove_timestamp get_timestamps write_influxdb_line_protocol get_cpubusy_series calc_ratio_series calc_sum_series div_series calc_aggregate_metrics calc_efficiency_metrics create_graph_hash);
 use File::Basename;
 use Data::Dumper;
 use List::Util('sum');
@@ -55,6 +55,7 @@ my $timestamp_ms_diff;
 my $line;
 my %avg;
 my %total;
+my $series_trim = 3;
 my $primary_metric;
 if ($test_type =~ /rr/) {
 	$primary_metric="trans_sec";
@@ -224,6 +225,7 @@ foreach $result_file ( readdir($dh) ) {
 		close(IN_FILE);
 		# the uid should be unique
 		if ( (@latency_samples) ) {
+			trim_series(\@latency_samples, $series_trim, $series_trim);
 			my %this_lat_dataset;
 			my $description = "Average elapsed time spanning: client sending, server accepting/sending, and client receiving 1 message, over a 1 second window";
 			my $mean = get_mean(\@latency_samples);
@@ -234,6 +236,7 @@ foreach $result_file ( readdir($dh) ) {
 			push(@usec, \%this_lat_dataset);
 		}
 		if ( (@throughput_samples) ) {
+			trim_series(\@throughput_samples, $series_trim, $series_trim);
 			my %this_tput_dataset;
 			my $mean = get_mean(\@throughput_samples);
 			%this_tput_dataset = ( 	get_label('role_label') => $role, get_label('client_hostname_label') => $client_hostname,
