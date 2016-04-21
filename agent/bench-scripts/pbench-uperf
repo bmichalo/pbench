@@ -292,7 +292,8 @@ while true; do
 		-r|--runtime)
 		shift
 		if [ -n "$1" ]; then
-			runtime="$1"
+			# runtime is padded by 6 seconds to allow 3 seconds ramp up and ramp down
+			runtime=`echo "$1 + 6" | bc`
 			shift
 		fi
 		;;
