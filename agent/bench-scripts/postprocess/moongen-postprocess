@@ -43,12 +43,31 @@ my @Mframes_cpu;# each array element contains a hash with:
 
 my %latency;    # a hash of latency-type:array-of-latency-values,
 		# for example $latency{usec[0..1]}
-my @usec;	# each array element contains a hash with:
+my @usec_avg;	# each array element contains a hash with:
 	    	# hostname:
 	    	# port_id:
 	    	# role:
 	    	# description:
 	    	# timeseries: a hash of timestamp,value elements
+my @usec_95th;	# each array element contains a hash with:
+	    	# hostname:
+	    	# port_id:
+	    	# role:
+	    	# description:
+	    	# timeseries: a hash of timestamp,value elements
+my @usec_99th;	# each array element contains a hash with:
+	    	# hostname:
+	    	# port_id:
+	    	# role:
+	    	# description:
+	    	# timeseries: a hash of timestamp,value elements
+my @usec_99_99th;	# each array element contains a hash with:
+	    	# hostname:
+	    	# port_id:
+	    	# role:
+	    	# description:
+	    	# timeseries: a hash of timestamp,value elements
+
 
 my %throughput; # a hash of throughput-type:array-of-throughput-values,
 		# for example $throughput{Mframes_sec[0..1]
@@ -122,6 +141,12 @@ my $uperf_primary_metric="Mframes_sec";
 my $rate; 
 my $loss;
 my $loss_pct;
+my $samples;
+my $lat_average;
+my $lat_95th;
+my $lat_99th;
+my $lat_99_99th;
+my $stddev;
 my $start_rate; 
 my $frame_size;
 my $run_bidirec;
@@ -130,6 +155,7 @@ my $search_run_time;
 my $validation_run_time;
 my $acceptable_loss_pct;
 my $port_list;
+my %hist;
 open( TXT, "<$dir/moongen-result.txt" ) or die "Can't open $dir/moongen-result.txt: $!";
 while ( <TXT> ) {
 	# [REPORT]      total: Tx frames: 50620437 Rx Frames: 50620437 frame loss: 0, 0.00000000% Rx Mpps: 0.84
@@ -139,6 +165,29 @@ while ( <TXT> ) {
 		$rate = $5;
 		$loss_pct = $4;
 		$loss = $3;
+	}
+	# [Histogram] Samples: 23034, Average: 8336.7 ns, StdDev: 659.4 ns, Quartiles: 7878.4/8320.0/8787.2 ns
+	if (/^\[Histogram\]\s+Samples:\s+(\d+), Average: (\d+\.\d+) ns, StdDev: (\d+\.\d+) ns,.*/) {
+		printf "found histogram\n";
+		$samples = $1;
+		$lat_average = $2;
+		$stddev = $3;
+		open( HIST, "<$dir/hist.csv" ) or die "Can't open $dir/hist.csv: $!";
+		my $hist_line;
+		my @values;
+		while ( $hist_line = <HIST> ) {
+			if ($hist_line =~ /(\d+\.\d+),(\d+)/) {
+				my $value = $1;
+				my $count = $2;
+				for (my $i = 0; $i < $count; $i++) {
+					push(@values, $value); 
+				}
+			}
+		}
+		@values = sort {$a <=> $b} @values;
+		$lat_95th =  $values[sprintf("%.0f",(0.95*($#values)))];
+		$lat_99th =  $values[sprintf("%.0f",(0.99*($#values)))];
+		$lat_99_99th =  $values[sprintf("%.0f",(0.9999*($#values)))];
 	}
 	# [PARAMETERS] startRate: 5 frameSize: 256 runBidirec: true searchRunTime: 60 validationRunTime: 60 acceptableLossPct: 1 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\sframeSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+searchRunTime:\s+(\d+)\s+validationRunTime:\s+(\d+)\s+acceptableLossPct:\s+(\d+[\.\d+]*)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
@@ -162,6 +211,7 @@ while ( <TXT> ) {
 				   'acceptable_loss_pct' => "$acceptable_loss_pct",
 				   'port_list' => "$port_list" } );
 	}
+	
 	# [PARAMETERS] startRate: 4.000000 frameSize: 64 runBidirec: false latencyRunTime: 15 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\sframeSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+latencyRunTime:\s+(\d+)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
 		printf "found parameters\n";
@@ -191,6 +241,25 @@ push(@Gb_sec, { 'description' => "The number of bits (in billions) received from
 		'port' => "all",
 		'value' => ($frame_size *8 +64 +96) *$rate /1000 } );
 
+if ($lat_average) {
+	push(@usec_avg, { 'description' => "The average elapsed time between frame transmission and reception",
+			'uid' => "port:%port%",
+			'port' => "all",
+			'value' => $lat_average } );
+	push(@usec_95th, { 'description' => "The 95th percentile for elapsed time between frame transmission and reception",
+			'uid' => "port:%port%",
+			'port' => "all",
+			'value' => $lat_95th } );
+	push(@usec_99th, { 'description' => "The 99th percentile for elapsed time between frame transmission and reception",
+			'uid' => "port:%port%",
+			'port' => "all",
+			'value' => $lat_99th } );
+	push(@usec_99_99th, { 'description' => "The 99.99th percentile for elapsed time between frame transmission and reception",
+			'uid' => "port:%port%",
+			'port' => "all",
+			'value' => $lat_99_99th } );
+}
+
 # construct what we have so far in a master workload hash for:
 # throughput metrics
 if ( @Mframes_sec ) {
@@ -219,8 +288,17 @@ if ( %efficiency ) {
 }
 
 # latency
-if ( @usec ) {
-	$latency{'usec'} = \@usec;
+if ( @usec_avg ) {
+	$latency{'usec_avg'} = \@usec_avg;
+}
+if ( @usec_95th ) {
+	$latency{'usec_95th'} = \@usec_95th;
+}
+if ( @usec_99th ) {
+	$latency{'usec_99th'} = \@usec_99th;
+}
+if ( @usec_99_99th ) {
+	$latency{'usec_99_99th'} = \@usec_99_99th;
 }
 if ( %latency ) {
 	$workload{'latency'} = \%latency;
