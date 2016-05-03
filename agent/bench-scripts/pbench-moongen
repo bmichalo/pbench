@@ -354,8 +354,10 @@ for traffic_direction in `echo $traffic | sed -e s/,/" "/g`; do
 								echo "Not going to run $benchmark_name.  Only postprocesing existing data"
 								log "Not going to run $benchmnark_name.  Only postprocesing existing data"
 							fi
+							echo "$script_path/postprocess/$benchmark_name-postprocess $benchmark_results_dir $iteration $test_type $tool_label_pattern $tool_group" >"$benchmark_results_dir/moongen-postprocess.cmd"
 							$script_path/postprocess/$benchmark_name-postprocess "$benchmark_results_dir" "$iteration" "$test_type" "$tool_label_pattern" "$tool_group"
 						done
+						echo "$script_path/postprocess/process-iteration-samples $iteration_dir Mframes_sec $maxstddevpct $failures $max_failures $tar_nonref_data $keep_failed_tool_data" >"$iteration_dir/process-iteration-samples.cmd"
 						$script_path/postprocess/process-iteration-samples "$iteration_dir" "Mframes_sec" "$maxstddevpct" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
 						fail=$?
 						if [ $fail -eq 1 ]; then
@@ -379,6 +381,7 @@ for traffic_direction in `echo $traffic | sed -e s/,/" "/g`; do
 		done
 	done
 done
+echo "$script_path/postprocess/generate-benchmark-summary $benchmark_name $orig_cmd $benchmark_run_dir" >"$benchmark_run_dir/generate-benchmark-summary.cmd"
 $script_path/postprocess/generate-benchmark-summary "$benchmark_name" "$orig_cmd" "$benchmark_run_dir"
 pbench-collect-sysinfo --group=$tool_group --dir=$benchmark_run_dir end
 rmdir $benchmark_run_dir/.running
