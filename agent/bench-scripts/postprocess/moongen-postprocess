@@ -43,30 +43,18 @@ my @Mframes_cpu;# each array element contains a hash with:
 
 my %latency;    # a hash of latency-type:array-of-latency-values,
 		# for example $latency{usec[0..1]}
-my @usec_avg;	# each array element contains a hash with:
+		#
+		# each array element contains a hash with:
 	    	# hostname:
 	    	# port_id:
 	    	# role:
 	    	# description:
-	    	# timeseries: a hash of timestamp,value elements
-my @usec_95th;	# each array element contains a hash with:
-	    	# hostname:
-	    	# port_id:
-	    	# role:
-	    	# description:
-	    	# timeseries: a hash of timestamp,value elements
-my @usec_99th;	# each array element contains a hash with:
-	    	# hostname:
-	    	# port_id:
-	    	# role:
-	    	# description:
-	    	# timeseries: a hash of timestamp,value elements
-my @usec_99_99th;	# each array element contains a hash with:
-	    	# hostname:
-	    	# port_id:
-	    	# role:
-	    	# description:
-	    	# timeseries: a hash of timestamp,value elements
+my @usec_avg;
+my @usec_min;
+my @usec_max;
+my @usec_95th;	
+my @usec_99th;
+my @usec_99_99th;
 
 
 my %throughput; # a hash of throughput-type:array-of-throughput-values,
@@ -144,6 +132,8 @@ my $loss_pct;
 my $samples;
 my $nr_flows;
 my $lat_average;
+my $lat_min;
+my $lat_max;
 my $lat_95th;
 my $lat_99th;
 my $lat_99_99th;
@@ -189,6 +179,8 @@ while ( <TXT> ) {
 		$lat_95th =  $values[sprintf("%.0f",(0.95*($#values)))];
 		$lat_99th =  $values[sprintf("%.0f",(0.99*($#values)))];
 		$lat_99_99th =  $values[sprintf("%.0f",(0.9999*($#values)))];
+		$lat_min = $values[0];
+		$lat_max = $values[-1];
 	}
 	# [PARAMETERS] startRate: 5 frameSize: 256 runBidirec: true searchRunTime: 60 validationRunTime: 60 acceptableLossPct: 1 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\snrFlows:\s+(\d+)\s+frameSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+searchRunTime:\s+(\d+)\s+validationRunTime:\s+(\d+)\s+acceptableLossPct:\s+(\d+[\.\d+]*)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
@@ -246,19 +238,37 @@ push(@Gb_sec, { 'description' => "The number of bits (in billions) received from
 		'value' => ($frame_size *8 +64 +96) *$rate /1000 } );
 
 if ($lat_average) {
-	push(@usec_avg, { 'description' => "The average elapsed time between frame transmission and reception",
+	push(@usec_avg, { 'description' => "The average elapsed time in nanoseconds between frame transmission and reception",
 			'uid' => "port:%port%",
 			'port' => "all",
 			'value' => $lat_average } );
-	push(@usec_95th, { 'description' => "The 95th percentile for elapsed time between frame transmission and reception",
+}
+if ($lat_min) {
+	push(@usec_min, { 'description' => "The minimum elapsed time in nanoseconds between frame transmission and reception",
+			'uid' => "port:%port%",
+			'port' => "all",
+			'value' => $lat_min } );
+}
+if ($lat_max) {
+	push(@usec_max, { 'description' => "The maximum elapsed time in nanoseconds between frame transmission and reception",
+			'uid' => "port:%port%",
+			'port' => "all",
+			'value' => $lat_max } );
+}
+if ($lat_95th) {
+	push(@usec_95th, { 'description' => "The 95th percentile for elapsed time in nanoseconds between frame transmission and reception",
 			'uid' => "port:%port%",
 			'port' => "all",
 			'value' => $lat_95th } );
-	push(@usec_99th, { 'description' => "The 99th percentile for elapsed time between frame transmission and reception",
+}
+if ($lat_99th) {
+	push(@usec_99th, { 'description' => "The 99th percentile for elapsed time in nanoseconds between frame transmission and reception",
 			'uid' => "port:%port%",
 			'port' => "all",
 			'value' => $lat_99th } );
-	push(@usec_99_99th, { 'description' => "The 99.99th percentile for elapsed time between frame transmission and reception",
+}
+if ($lat_99_99th) {
+	push(@usec_99_99th, { 'description' => "The 99.99th percentile for elapsed time in nanoseconds between frame transmission and reception",
 			'uid' => "port:%port%",
 			'port' => "all",
 			'value' => $lat_99_99th } );
@@ -294,6 +304,12 @@ if ( %efficiency ) {
 # latency
 if ( @usec_avg ) {
 	$latency{'usec_avg'} = \@usec_avg;
+}
+if ( @usec_min ) {
+	$latency{'usec_min'} = \@usec_min;
+}
+if ( @usec_max ) {
+	$latency{'usec_max'} = \@usec_max;
 }
 if ( @usec_95th ) {
 	$latency{'usec_95th'} = \@usec_95th;
