@@ -375,7 +375,7 @@ for traffic_direction in `echo $traffic | sed -e s/,/" "/g`; do
 							((failures++))
 						fi
 						if [ $fail -eq 0 -o $failures -ge $max_failures ]; then
-							error_log "Moving to the next iteration"
+							debug_log "Moving to the next iteration"
 							break
 						fi
 					done # break out of this loop only if the $result_stddevpct is lower than $maxstddevpct
