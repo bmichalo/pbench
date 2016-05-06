@@ -162,6 +162,10 @@ for i in $(ls -1 samples/) ; do
             testcmpr $i
             sts=$?
             ;;
+	process-iteration-samples-*)
+	    testprocessiterationsamples $i
+	    sts=$?
+	    ;;
         *)
             testit $i ${i%-[0-9]}
             sts=$?
