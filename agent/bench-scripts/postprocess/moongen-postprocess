@@ -169,7 +169,7 @@ while ( <TXT> ) {
 		my @values;
 		while ( $hist_line = <HIST> ) {
 			if ($hist_line =~ /(\d+\.\d+),(\d+)/) {
-				my $value = $1;
+				my $value = $1/1000;
 				my $count = $2;
 				for (my $i = 0; $i < $count; $i++) {
 					push(@values, $value); 
