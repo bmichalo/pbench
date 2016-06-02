@@ -162,7 +162,7 @@ while ( <TXT> ) {
 	if (/^\[Histogram\]\s+Samples:\s+(\d+), Average: (\d+\.\d+) ns, StdDev: (\d+\.\d+) ns,.*/) {
 		printf "found histogram\n";
 		$samples = $1;
-		$lat_average = $2;
+		$lat_average = $2/1000;
 		$stddev = $3;
 		open( HIST, "<$dir/hist.csv" ) or die "Can't open $dir/hist.csv: $!";
 		my $hist_line;
