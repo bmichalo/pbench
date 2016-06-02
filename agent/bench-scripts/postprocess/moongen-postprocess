@@ -126,7 +126,8 @@ my $uperf_primary_metric="Mframes_sec";
 
 
 # Load the data from moongen-result.txt and create throughput metrics
-my $rate; 
+my $tx_rate; 
+my $rx_rate; 
 my $loss;
 my $loss_pct;
 my $samples;
@@ -149,11 +150,11 @@ my $port_list;
 my %hist;
 open( TXT, "<$dir/moongen-result.txt" ) or die "Can't open $dir/moongen-result.txt: $!";
 while ( <TXT> ) {
-	# [REPORT]      total: Tx frames: 50620437 Rx Frames: 50620437 frame loss: 0, 0.00000000% Rx Mpps: 0.84
-	# [REPORT]      total: Tx frames: 254521764 Rx Frames: 252746896 frame loss: 1774868, 0.69733447% Rx Mpps: 4.21
-	if (/^\[REPORT\]\s+total:\s+Tx\sframes:\s+(\d+)\s+Rx\s[f|F]rames:\s+(\d+)\s+frame\sloss:\s+([-]*\d+),\s+([-]*\d+\.\d+)%\s+Rx Mpps:\s+(\d+\.\d+)/) {
+	# [REPORT]      total: Tx frames: 6002348 Rx Frames: 6002348 frame loss: 0, 0.000000% Tx Mpps: 0.100000 Rx Mpps: 0.099990
+	if (/^\[REPORT\]\s+total:\s+Tx\sframes:\s+(\d+)\s+Rx\s[f|F]rames:\s+(\d+)\s+frame\sloss:\s+([-]*\d+),\s+([-]*\d+\.\d+)%\s+Tx Mpps:\s+(\d+\.\d+)\s+Rx Mpps:\s+(\d+\.\d+)/) {
 		printf "found report\n";
-		$rate = $5;
+		$rx_rate = $6;
+		$tx_rate = $5;
 		$loss_pct = $4;
 		$loss = $3;
 	}
@@ -226,16 +227,41 @@ while ( <TXT> ) {
 				   'search_run_time' => "$latency_run_time",
 				   'port_list' => "$port_list" } );
 	}
+	# [PARAMETERS] startRate: 2.000000 nrFlows: 1024 frameSize: 64 runBidirec: false latencyRunTime: 1800 searchRunTime: 10 validationRunTime: 10 acceptableLossPct: 1.000000 ports: 1,2
+	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\snrFlows:\s+(\d+)\s+frameSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+latencyRunTime:\s+(\d+)\s+searchRunTime:\s+(\d+)\s+validationRunTime:\s+(\d+)\s+acceptableLossPct:\s+(\d+[\.\d+]*)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
+		printf "found parameters\n";
+		$start_rate = $1;
+		$nr_flows = $2;
+		$frame_size = $3;
+		$run_bidirec = $4;
+		$latency_run_time = $5;
+		$search_run_time = $6;
+		$validation_run_time = $7;
+		$acceptable_loss_pct = $8;
+		$port_list = $9;
+		push(@benchmark, { 'name' => "MoonGen",
+				   'description' => "Test parameters for MoonGen",
+				   'role' => "packet-generator",
+				   'uid' => "benchmark:%name%",
+				   'start_rate' => "$start_rate",
+				   'frame_size' => $frame_size,
+				   'run_bidirec' => "$run_bidirec",
+				   'latency_run_time' => "$latency_run_time",
+				   'search_run_time' => "$search_run_time",
+				   'validation_run_time' => "$validation_run_time",
+				   'acceptable_loss_pct' => "$acceptable_loss_pct",
+				   'port_list' => "$port_list" } );
+	}
 }
 close TXT;
 push(@Mframes_sec, { 'description' => "The number of Ethernet frames (in millions) received per second",
 		     'uid' => "port:%port%",
 		     'port' => "all",
-		     'value' => $rate } );
+		     'value' => $rx_rate } );
 push(@Gb_sec, { 'description' => "The number of bits (in billions) received from Ethernet phsycial layer per second",
 		'uid' => "port:%port%",
 		'port' => "all",
-		'value' => ($frame_size *8 +64 +96) *$rate /1000 } );
+		'value' => ($frame_size *8 +64 +96) *$rx_rate /1000 } );
 
 if ($lat_average) {
 	push(@usec_avg, { 'description' => "The average elapsed time in nanoseconds between frame transmission and reception",
