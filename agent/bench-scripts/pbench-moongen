@@ -13,6 +13,7 @@
 # This script will also generate a "summary-results.txt" with a table of all
 # results, efficiency, and other stats.
 
+pbench_cmd="$@"
 script_path=`dirname $0`
 script_name=`basename $0`
 pbench_bin="`cd ${script_path}/..; /bin/pwd`"
@@ -275,6 +276,9 @@ else
 	fi
 fi
 mkdir -p $benchmark_run_dir/.running
+# save a copy of the command, in case the test needs to be reproduced or post-processed again
+echo "$script_name $pbench_cmd" >$benchmark_run_dir/$script_name.cmd
+chmod +x $benchmark_run_dir/$script_name.cmd
 
 total_iterations=0
 for traffic_direction in `echo $traffic | sed -e s/,/" "/g`; do
@@ -385,11 +389,13 @@ for rate in `echo $rates | sed -e s/,/" "/g`; do
 									echo "Not going to run $benchmark_name.  Only postprocesing existing data"
 									log "Not going to run $benchmnark_name.  Only postprocesing existing data"
 								fi
-								echo "$script_path/postprocess/$benchmark_name-postprocess $benchmark_results_dir $iteration $test_type $tool_label_pattern $tool_group" >"$benchmark_results_dir/moongen-postprocess.cmd"
-								$script_path/postprocess/$benchmark_name-postprocess "$benchmark_results_dir" "$iteration" "$test_type" "$tool_label_pattern" "$tool_group"
+								echo "$script_path/postprocess/$benchmark_name-postprocess $benchmark_results_dir $iteration $test_type $tool_label_pattern $tool_group" >"$benchmark_results_dir/$benchmark_name-postprocess.cmd"
+								chmod +x "$benchmark_results_dir/$benchmark_name-postprocess.cmd"
+								$benchmark_results_dir/$benchmark_name-postprocess.cmd
 							done
 							echo "$script_path/postprocess/process-iteration-samples $iteration_dir Mframes_sec $maxstddevpct $failures $max_failures $tar_nonref_data $keep_failed_tool_data" >"$iteration_dir/process-iteration-samples.cmd"
-							$script_path/postprocess/process-iteration-samples "$iteration_dir" "Mframes_sec" "$maxstddevpct" "$failures" "$max_failures" "$tar_nonref_data" "$keep_failed_tool_data"
+							chmod +x "$iteration_dir/process-iteration-samples.cmd"
+							$iteration_dir/process-iteration-samples.cmd
 							fail=$?
 							if [ $fail -eq 1 ]; then
 								error_log "This test iteration failed"
