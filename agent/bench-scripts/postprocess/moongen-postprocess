@@ -114,57 +114,56 @@ my %avg;
 my %total;
 my $uperf_primary_metric="Mframes_sec";
 
-# 
-# "Mframes-sec" : [
-# {
-# "hostname": "perf104.perf.lab.eng.bos.redhat.com",
-# "role": "packet-generator",
-# "samples" : {1407890808: 7.75}
-# "average" : "7.77"
-# }
-# ],
-
-
 # Load the data from moongen-result.txt and create throughput metrics
-my $tx_rate; 
-my $rx_rate; 
-my $loss;
-my $loss_pct;
-my $samples;
-my $nr_flows;
-my $lat_average;
-my $lat_min;
-my $lat_max;
-my $lat_95th;
-my $lat_99th;
-my $lat_99_99th;
-my $stddev;
-my $start_rate; 
 my $frame_size;
-my $run_bidirec;
-my $latency_run_time;
-my $search_run_time;
-my $validation_run_time;
-my $acceptable_loss_pct;
-my $port_list;
-my %hist;
 open( TXT, "<$dir/moongen-result.txt" ) or die "Can't open $dir/moongen-result.txt: $!";
 while ( <TXT> ) {
+	# [REPORT]Device 0->1: Tx frames: 10004131 Rx Frames: 10004131 frame loss: 0, 0.000000% Rx Mpps: 1.000188
+	if (/^\[REPORT\]Device\s(\d+)..(\d+):\s+Tx\sframes:\s+(\d+)\s+Rx\s[f|F]rames:\s+(\d+)\s+frame\sloss:\s+([-]*\d+),\s+([-]*\d+\.\d+)%\s+Rx Mpps:\s+(\d+\.\d+)/) {
+		my $tx_port = $1;
+		my $rx_port = $2;
+		my $loss = $5;
+		my $loss_pct = $6;
+		my $rx_rate = $7;
+		my $uid = "tx_port:%tx_port%-rx_port:%rx_port%";
+		push(@Mframes_sec, { 'description' => "The number of Ethernet frames (in millions) received per second",
+		     		'uid' => $uid,
+				'tx_port' => $rx_port,
+				'rx_port' => $tx_port,
+		     		'value' => $rx_rate } );
+		push(@Gb_sec, { 'description' => "The number of bits (in billions) received from Ethernet phsycial layer per second",
+		     		'uid' => $uid,
+				'tx_port' => $rx_port,
+				'rx_port' => $tx_port,
+				'value' => ($frame_size *8 +64 +96) *$rx_rate /1000 } );
+	}
 	# [REPORT]      total: Tx frames: 6002348 Rx Frames: 6002348 frame loss: 0, 0.000000% Tx Mpps: 0.100000 Rx Mpps: 0.099990
 	if (/^\[REPORT\]\s+total:\s+Tx\sframes:\s+(\d+)\s+Rx\s[f|F]rames:\s+(\d+)\s+frame\sloss:\s+([-]*\d+),\s+([-]*\d+\.\d+)%\s+Tx Mpps:\s+(\d+\.\d+)\s+Rx Mpps:\s+(\d+\.\d+)/) {
-		printf "found report\n";
-		$rx_rate = $6;
-		$tx_rate = $5;
-		$loss_pct = $4;
-		$loss = $3;
+		my $rx_rate = $6;
+		my $tx_rate = $5;
+		my $loss_pct = $4;
+		my $loss = $3;
+		my $uid = "tx_port:%tx_port%-rx_port:%rx_port%";
+		push(@Mframes_sec, { 'description' => "The number of Ethernet frames (in millions) received per second",
+		     		'uid' => $uid,
+				'tx_port' => "all",
+				'rx_port' => "all",
+		     		'value' => $rx_rate } );
+		push(@Gb_sec, { 'description' => "The number of bits (in billions) received from Ethernet phsycial layer per second",
+		     		'uid' => $uid,
+				'tx_port' => "all",
+				'rx_port' => "all",
+				'value' => ($frame_size *8 +64 +96) *$rx_rate /1000 } );
 	}
-	# [Histogram] Samples: 23034, Average: 8336.7 ns, StdDev: 659.4 ns, Quartiles: 7878.4/8320.0/8787.2 ns
-	if (/^\[Histogram\]\s+Samples:\s+(\d+), Average: (\d+\.\d+) ns, StdDev: (\d+\.\d+) ns,.*/) {
-		printf "found histogram\n";
-		$samples = $1;
-		$lat_average = $2/1000;
-		$stddev = $3;
-		open( HIST, "<$dir/hist.csv" ) or die "Can't open $dir/hist.csv: $!";
+	# [Histogram port 0 to port 1] Samples: 23034, Average: 8336.7 ns, StdDev: 659.4 ns, Quartiles: 7878.4/8320.0/8787.2 ns
+	if (/^\[Histogram port (\d+) to port (\d+)\]\s+Samples:\s+(\d+), Average: (\d+\.\d+) ns, StdDev: (\d+\.\d+) ns,.*/) {
+		my $tx_port = $1;
+		my $rx_port = $2;
+		my $samples = $3;
+		my $lat_average = $4/1000;
+		my $stddev = $5;
+		my $hist_file = $dir . "/hist:" . $tx_port . "-" . $rx_port . ".csv";
+		open( HIST, "<$hist_file" ) or die "Can't open $hist_file: $!";
 		my $hist_line;
 		my @values;
 		while ( $hist_line = <HIST> ) {
@@ -177,23 +176,53 @@ while ( <TXT> ) {
 			}
 		}
 		@values = sort {$a <=> $b} @values;
-		$lat_95th =  $values[sprintf("%.0f",(0.95*($#values)))];
-		$lat_99th =  $values[sprintf("%.0f",(0.99*($#values)))];
-		$lat_99_99th =  $values[sprintf("%.0f",(0.9999*($#values)))];
-		$lat_min = $values[0];
-		$lat_max = $values[-1];
+		my $lat_95th =  $values[sprintf("%.0f",(0.95*($#values)))];
+		my $lat_99th =  $values[sprintf("%.0f",(0.99*($#values)))];
+		my $lat_99_99th =  $values[sprintf("%.0f",(0.9999*($#values)))];
+		my $lat_min = $values[0];
+		my $lat_max = $values[-1];
+		my $uid = "tx_port:%tx_port%-rx_port:%rx_port%";
+		push(@usec_95th, { 'description' => "The 95th percentile for elapsed time in nanoseconds between frame transmission and reception",
+				'uid' => $uid,
+				'tx_port' => $tx_port,
+				'rx_port' => $rx_port,
+				'value' => $lat_95th } );
+		push(@usec_avg, { 'description' => "The average elapsed time in nanoseconds between frame transmission and reception",
+				'uid' => $uid,
+				'tx_port' => $tx_port,
+				'rx_port' => $rx_port,
+				'value' => $lat_average } );
+		push(@usec_min, { 'description' => "The minimum elapsed time in nanoseconds between frame transmission and reception",
+				'uid' => $uid,
+				'tx_port' => $tx_port,
+				'rx_port' => $rx_port,
+				'value' => $lat_min } );
+		push(@usec_max, { 'description' => "The maximum elapsed time in nanoseconds between frame transmission and reception",
+				'uid' => $uid,
+				'tx_port' => $tx_port,
+				'rx_port' => $rx_port,
+				'value' => $lat_max } );
+		push(@usec_99th, { 'description' => "The 99th percentile for elapsed time in nanoseconds between frame transmission and reception",
+				'uid' => $uid,
+				'tx_port' => $tx_port,
+				'rx_port' => $rx_port,
+				'value' => $lat_99th } );
+		push(@usec_99_99th, { 'description' => "The 99.99th percentile for elapsed time in nanoseconds between frame transmission and reception",
+				'uid' => $uid,
+				'tx_port' => $tx_port,
+				'rx_port' => $rx_port,
+				'value' => $lat_99_99th } );
 	}
 	# [PARAMETERS] startRate: 5 frameSize: 256 runBidirec: true searchRunTime: 60 validationRunTime: 60 acceptableLossPct: 1 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\snrFlows:\s+(\d+)\s+frameSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+searchRunTime:\s+(\d+)\s+validationRunTime:\s+(\d+)\s+acceptableLossPct:\s+(\d+[\.\d+]*)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
-		printf "found parameters\n";
-		$start_rate = $1;
-		$nr_flows = $2;
+		my $start_rate = $1;
+		my $nr_flows = $2;
 		$frame_size = $3;
-		$run_bidirec = $4;
-		$search_run_time = $5;
-		$validation_run_time = $6;
-		$acceptable_loss_pct = $7;
-		$port_list = $7;
+		my $run_bidirec = $4;
+		my $search_run_time = $5;
+		my $validation_run_time = $6;
+		my $acceptable_loss_pct = $7;
+		my $port_list = $7;
 		push(@benchmark, { 'name' => "MoonGen",
 				   'description' => "Test parameters for MoonGen",
 				   'role' => "packet-generator",
@@ -209,13 +238,12 @@ while ( <TXT> ) {
 	
 	# [PARAMETERS] startRate: 4.000000 frameSize: 64 runBidirec: false latencyRunTime: 15 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\snrFlows:\s+(\d+)\s+frameSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+latencyRunTime:\s+(\d+)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
-		printf "found parameters\n";
-		$start_rate = $1;
-		$nr_flows = $2;
+		my $start_rate = $1;
+		my $nr_flows = $2;
 		$frame_size = $3;
-		$run_bidirec = $4;
-		$latency_run_time = $5;
-		$port_list = $6;
+		my $run_bidirec = $4;
+		my $latency_run_time = $5;
+		my $port_list = $6;
 		push(@benchmark, { 'name' => "MoonGen",
 				   'description' => "Test parameters for MoonGen",
 				   'role' => "packet-generator",
@@ -229,16 +257,15 @@ while ( <TXT> ) {
 	}
 	# [PARAMETERS] startRate: 2.000000 nrFlows: 1024 frameSize: 64 runBidirec: false latencyRunTime: 1800 searchRunTime: 10 validationRunTime: 10 acceptableLossPct: 1.000000 ports: 1,2
 	if (/^\[PARAMETERS\]\s+startRate:\s+(\d+[\.\d+]*)\snrFlows:\s+(\d+)\s+frameSize:\s+(\d+)\s+runBidirec:\s+(\w+)\s+latencyRunTime:\s+(\d+)\s+searchRunTime:\s+(\d+)\s+validationRunTime:\s+(\d+)\s+acceptableLossPct:\s+(\d+[\.\d+]*)\s+ports:\s+(\d,\d[,\d,\d]*)/) {
-		printf "found parameters\n";
-		$start_rate = $1;
-		$nr_flows = $2;
+		my $start_rate = $1;
+		my $nr_flows = $2;
 		$frame_size = $3;
-		$run_bidirec = $4;
-		$latency_run_time = $5;
-		$search_run_time = $6;
-		$validation_run_time = $7;
-		$acceptable_loss_pct = $8;
-		$port_list = $9;
+		my $run_bidirec = $4;
+		my $latency_run_time = $5;
+		my $search_run_time = $6;
+		my $validation_run_time = $7;
+		my $acceptable_loss_pct = $8;
+		my $port_list = $9;
 		push(@benchmark, { 'name' => "MoonGen",
 				   'description' => "Test parameters for MoonGen",
 				   'role' => "packet-generator",
@@ -254,51 +281,6 @@ while ( <TXT> ) {
 	}
 }
 close TXT;
-push(@Mframes_sec, { 'description' => "The number of Ethernet frames (in millions) received per second",
-		     'uid' => "port:%port%",
-		     'port' => "all",
-		     'value' => $rx_rate } );
-push(@Gb_sec, { 'description' => "The number of bits (in billions) received from Ethernet phsycial layer per second",
-		'uid' => "port:%port%",
-		'port' => "all",
-		'value' => ($frame_size *8 +64 +96) *$rx_rate /1000 } );
-
-if ($lat_average) {
-	push(@usec_avg, { 'description' => "The average elapsed time in nanoseconds between frame transmission and reception",
-			'uid' => "port:%port%",
-			'port' => "all",
-			'value' => $lat_average } );
-}
-if ($lat_min) {
-	push(@usec_min, { 'description' => "The minimum elapsed time in nanoseconds between frame transmission and reception",
-			'uid' => "port:%port%",
-			'port' => "all",
-			'value' => $lat_min } );
-}
-if ($lat_max) {
-	push(@usec_max, { 'description' => "The maximum elapsed time in nanoseconds between frame transmission and reception",
-			'uid' => "port:%port%",
-			'port' => "all",
-			'value' => $lat_max } );
-}
-if ($lat_95th) {
-	push(@usec_95th, { 'description' => "The 95th percentile for elapsed time in nanoseconds between frame transmission and reception",
-			'uid' => "port:%port%",
-			'port' => "all",
-			'value' => $lat_95th } );
-}
-if ($lat_99th) {
-	push(@usec_99th, { 'description' => "The 99th percentile for elapsed time in nanoseconds between frame transmission and reception",
-			'uid' => "port:%port%",
-			'port' => "all",
-			'value' => $lat_99th } );
-}
-if ($lat_99_99th) {
-	push(@usec_99_99th, { 'description' => "The 99.99th percentile for elapsed time in nanoseconds between frame transmission and reception",
-			'uid' => "port:%port%",
-			'port' => "all",
-			'value' => $lat_99_99th } );
-}
 
 # construct what we have so far in a master workload hash for:
 # throughput metrics
