@@ -22,7 +22,13 @@ pbench_bin="`cd ${script_path}/..; /bin/pwd`"
 . "$pbench_bin"/base
 
 benchmark_name="moongen"
-moongen_dir="/root/MoonGen"
+if [ -z "$moongen_dir" ]; then
+	moongen_dir="/root/MoonGen"
+fi
+if [ ! -d "$moongen_dir" ]; then
+	error_log "The MoonGen directory, $moongen_dir, does not exist as a directory"
+	exit 1
+fi
 benchmark_bin=/usr/local/bin/$benchmark_name
 
 # Every bench-script follows a similar sequence:
@@ -35,7 +41,6 @@ benchmark_bin=/usr/local/bin/$benchmark_name
 # 7) postprocess analysis tool data
 
 # Defaults
-cfg_file="opnfv-vsperf-cfg.lua"
 benchmark_run_dir=""
 test_type="throughput"
 traffic="unidirec"
@@ -329,12 +334,12 @@ for rate in `echo $rates | sed -e s/,/" "/g`; do
 							fi
 							mkdir -p $iteration_dir
 							if [ "$postprocess_only" != "y" ]; then
-								pushd >/dev/null $moongen_dir
 								if [ $traffic_direction == "unidirec" ]; then
 									bidirec_opt=false
 								else
 									bidirec_opt=true
 								fi
+								cfg_file="$iteration_dir/opnfv-vsperf-cfg.lua"
 								echo "VSPERF {" >$cfg_file
 								if [ "$rate" != "none" ]; then
         								echo "startRate = $rate," >>$cfg_file
@@ -355,16 +360,13 @@ for rate in `echo $rates | sed -e s/,/" "/g`; do
         							echo "frameSize = $frame_size,">>$cfg_file
         							echo "ports = {$portlist}" >>$cfg_file
 								echo "}">>$cfg_file
-								if [ "$test_type" != "throughput" ]; then
-									cp $cfg_file $iteration_dir/$cfg_file
-								fi
-								popd >/dev/null
+								cp $cfg_file $moongen_dir/
 							fi
 							# each attempt at a test config requires multiple samples to get stddev
 							for sample in `seq 1 $nr_samples`; do
 								benchmark_results_dir="$iteration_dir/sample$sample"
 								if [ "$postprocess_only" != "y" ]; then
-									pushd >/dev/null $moongen_dir
+									/bin/rm -f $moongen_dir/hist*.csv
 									mkdir -p $benchmark_results_dir
 									echo "test sample $sample of $nr_samples"
 									log "test sample $sample of $nr_samples "
@@ -375,14 +377,13 @@ for rate in `echo $rates | sed -e s/,/" "/g`; do
 	
 									echo "pushd >/dev/null $moongen_dir" >$benchmark_client_cmd_file
 									echo "./build/MoonGen ./examples/opnfv-vsperf.lua" >>$benchmark_client_cmd_file
-									echo "popd >/dev/null $moongen_dir" >>$benchmark_client_cmd_file
+									echo "popd >/dev/null" >>$benchmark_client_cmd_file
 									chmod +x $benchmark_client_cmd_file
 									pbench-start-tools --group=$tool_group --iteration=$iteration --dir=$benchmark_results_dir
 									$benchmark_client_cmd_file | tee $result_file
 									pbench-stop-tools --group=$tool_group --iteration=$iteration --dir=$benchmark_results_dir
 									pbench-postprocess-tools --group=$tool_group --iteration=$iteration --dir=$benchmark_results_dir
-									/bin/cp $moongen_dir/hist.csv $benchmark_results_dir
-									popd >/dev/null
+									cp $moongen_dir/hist*.csv $benchmark_results_dir
 								else
 									if [[ ! -d $benchmark_results_dir ]]; then
 										error_log "Results directory $benchmark_results_dir does not exist, skipping post-processing"
