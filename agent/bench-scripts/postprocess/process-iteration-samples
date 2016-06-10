@@ -27,6 +27,7 @@ use BenchPostprocess qw(get_uid get_label get_cpubusy_series calc_ratio_series c
 use File::Basename;
 use Data::Dumper;
 use List::Util('sum');
+use SigFigs;
 use JSON;
 
 # This script produces a JSON array containing the information for
@@ -94,6 +95,7 @@ my $max_failures = $ARGV[4]; # the maxium number of failures allowed
 my $tar_nonref_data = $ARGV[5]; # (y/n) tar/compress the data samples that are not the reference result?
 my $keep_failed_tool_data = $ARGV[6]; # (y/n) keep the tool data for a set of samples that failed?
 my @json_samples;
+my $nr_significant_figures = 4;
 
 sub get_avg_stddev {
         my @numbers = @_;
@@ -146,7 +148,10 @@ sub get_avg_stddev {
 		} else {
 			$stddevpct = 100 * $stddev / $avg;
 		}
-		return (0 + $avg, 0 + $stddev, 0 + $stddevpct, 0 + $closest_index);
+		return (0 + FormatSigFigs(sprintf("%f", $avg), $nr_significant_figures),
+			0 + FormatSigFigs(sprintf("%f", $stddev), $nr_significant_figures),
+			0 + FormatSigFigs(sprintf("%f", $stddevpct), $nr_significant_figures),
+			0 + $closest_index);
 	}
 }
 
