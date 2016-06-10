@@ -316,7 +316,7 @@ my @all_server_transaction_times;
 my $nr_resp_files = 0;
 opendir($dh, $dir) || die "$script: can't open directory $dir: $!\n";
 foreach my $resp_file ( readdir($dh) ) {
-	if ( $resp_file =~ /^response-times-(.+).txt$/) {
+	if ( $resp_file =~ /^client::(.+)-server::(.+):(\d+)--response-times\.txt$/) {
 		my $server_ip = $1;
 		# The server ip should be in the file name, like "response-times-192.168.1.1.txt"
 		open(RESP_FILE, "$dir/$resp_file") || die "$script: can't open file $dir/$resp_file: $!\n";
