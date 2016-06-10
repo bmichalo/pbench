@@ -135,7 +135,7 @@ if (opendir($dh, $tool_group_dir)) {
 	print "$script: could not find any directories in $tool_group_dir which matched $tool_label_pattern\n";
 }
 closedir  $dh;
-foreach $this_tool_dir (keys %tool_ids) {
+foreach $this_tool_dir (sort keys %tool_ids) {
 	my $res;
 	my $this_tool_id = $tool_ids{$this_tool_dir};
 	my $role = "host";
@@ -401,7 +401,7 @@ if ($nr_resp_files > 0) {
 
 # write to JSON format file
 my $json_file = $dir . "/result.json";
-my $json_text   = to_json( \%workload, { ascii => 1, pretty => 1 } );
+my $json_text   = to_json( \%workload, { ascii => 1, pretty => 1, canonical => 1 } );
 open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
 print JSON $json_text;
 close(JSON);

@@ -199,7 +199,7 @@ sub write_influxdb_line_protocol {
 	my $file_name = $dir . "/" . $measurement . ".txt";
 	if (open(INFLUXDB, ">>$file_name")) {
 		my $timestamp;
-		foreach $timestamp (keys $$data_ref{get_label('timeseries_label')} ) {
+		foreach $timestamp (keys %{ $$data_ref{get_label('timeseries_label')} } ) {
 			my $this_key;
 			my $id_string = $measurement;
 			foreach $this_key (keys %{ $data_ref}) {
@@ -483,9 +483,9 @@ sub calc_efficiency_metrics {
 
 	my $resource_metric_name;
 	if ($$workload_ref{'resource'} and $$workload_ref{'throughput'}) {
-		foreach $resource_metric_name (keys $$workload_ref{'resource'}) {
+		foreach $resource_metric_name (keys %{ $$workload_ref{'resource'} }) {
 			for (my $i = 0; $i < scalar @{ $$workload_ref{'resource'}{$resource_metric_name} }; $i++) { # cpu_busy[$i]
-				foreach my $throughput_metric_name (keys $$workload_ref{'throughput'} ) { # Gb-sec, trans_sec
+				foreach my $throughput_metric_name (keys %{ $$workload_ref{'throughput'} } ) { # Gb-sec, trans_sec
 					for (my $j = 0; $j < scalar @{ $$workload_ref{'throughput'}{$throughput_metric_name} }; $j++) { # Gb_sec[$i], trans_sec[$i]
 						if ( $$workload_ref{'throughput'}{$throughput_metric_name}[$j]{get_label('client_hostname_label')} eq $$workload_ref{'resource'}{$resource_metric_name}[$i]{get_label('hostname_label')} ) {
 							my $eff_metric_name = $throughput_metric_name . "/" . $resource_metric_name;
@@ -518,7 +518,7 @@ sub create_graph_hash {
 	my $html_name = $$workload_ref{'parameters'}{'benchmark'}[0]{get_label('benchmark_name_label')};
 	foreach my $metric_type ('throughput', 'latency', 'resource', 'efficiency') {
 		if ($$workload_ref{$metric_type}) {
-		foreach my $metric_name (keys $$workload_ref{$metric_type} ) {
+		foreach my $metric_name (keys %{ $$workload_ref{$metric_type} }) {
 			for (my $i = 0; $i < scalar @{ $$workload_ref{$metric_type}{$metric_name} }; $i++) {
 				my $series_name = get_uid($$workload_ref{$metric_type}{$metric_name}[$i]{get_label('uid_label')}, \%{ $$workload_ref{$metric_type}{$metric_name}[$i] }); 
 				for (my $j = 0; $j < scalar @{ $$workload_ref{$metric_type}{$metric_name}[$i]{get_label('timeseries_label')} }; $j++ ) {

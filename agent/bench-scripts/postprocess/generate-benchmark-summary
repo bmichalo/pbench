@@ -82,7 +82,7 @@ foreach $dir (sort @dirs) {
                 push @iterations, \%iteration;
 	}
 }
-my $json_text  = to_json( \@iterations, { ascii => 1, pretty => 1 } );
+my $json_text  = to_json( \@iterations, { ascii => 1, pretty => 1, canonical => 1 } );
 my $json_file = $benchmark_run_dir . "/result.json";
 open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
 print JSON $json_text;
