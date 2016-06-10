@@ -104,6 +104,7 @@ function gen_xml {
 		echo "    <transaction iterations=\"1\">"
 		echo "      <flowop type=\"accept\" options=\"remotehost=$h protocol=$proto\"/>"
 		echo "    </transaction>"
+		echo "    <transaction duration=\"$runtime\">"
 		echo "      <flowop type=\"read\" options=\"count=16 size=$size\"/>"
 		echo "    </transaction>"
 		echo "    <transaction iterations=\"1\">"
