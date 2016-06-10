@@ -191,7 +191,7 @@ foreach $sample (@json_samples) { # samples 0..N
 		# $sample_hash{"parameters"}{"benchmark"}[0]  .This has key:value pairs for things
 		# like message_size_bytes:64 or num_flows:1024. There may be only one hash in this
 		# array, but it's possible to have more (for a potential multi-benchmark-type workload)
-		foreach my $metric_name (keys $sample_hash{$metric_type}) {
+		foreach my $metric_name (keys %{ $sample_hash{$metric_type} }) {
 			for (my $i = 0; $i < scalar @{ $sample_hash{$metric_type}{$metric_name} }; $i++) {
 			my $mapped_uid = get_uid($sample_hash{$metric_type}{$metric_name}[$i]{get_label('uid_label')}, \%{ $sample_hash{$metric_type}{$metric_name}[$i] });
 				if ($mapped_uid) {
@@ -261,7 +261,7 @@ foreach $sample (@json_samples) { # samples 0..N
 my $fail = 0;
 foreach my $metric_name (keys %iteration) {
 	my $metric_type;
-	foreach $metric_type (keys $iteration{$metric_name}) {
+	foreach $metric_type (keys %{ $iteration{$metric_name} }) {
 		my $i;
 		for ($i = 0; $i < scalar @{$iteration{$metric_name}{$metric_type}}; $i++) {
 			my $key;
@@ -307,7 +307,7 @@ if ( $iteration{'throughput'}{$primary_metric} ) {
 
 # Finally write the data in JSON
 my $json_file = $dir . "/result.json";
-my $json_text   = to_json( \%iteration, { ascii => 1, pretty => 1 } );
+my $json_text   = to_json( \%iteration, { ascii => 1, pretty => 1, canonical => 1 } );
 open(JSON, ">$json_file") || die "$script: could not open file $json_file: $!\n";
 print JSON $json_text;
 close(JSON);
