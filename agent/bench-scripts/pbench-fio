@@ -59,6 +59,8 @@ primary_metric="readwrite_IOPS"
 function fio_usage() {
 		printf "The following options are available:\n"
 		printf "\n"
+		printf -- "\t-c str --config=str               name of the test config (i.e. nfs-on-xfs)\n"
+		printf "\n"
 		printf -- "\t-t str[,str] --test-types=str[,str]\n"
 		printf "\t\tone or more of %s\n" $supported_test_types
 		printf "\n"
