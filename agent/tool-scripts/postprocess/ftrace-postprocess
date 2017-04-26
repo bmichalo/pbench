@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+
+# Author: Andrew Theurer
+#
+# usage: ftrace-postprocess <dir>  dir = directory where kvmtrace.txt can be found
+#
+# The purpose of this script is to
+# show latency between a cpu exiting user mode, running in kernel mode, then switching back
+
+use strict;
+use warnings;
+use bigint;
+no warnings 'portable';
+
+use Data::Dumper;
+
+my $dir=$ARGV[0];
+my $line;
+my $line_number = 1;
+my %cpu_prev_exit_timestamp;
+my %cpu_prev_exit_function;
+my %cpu_prev_exit_line_number;
+
+my %cpu_prev_timestamp;
+my %cpu_prev_line_number;
+my %cpu_latency_hist; # $cpu_latency_hist{$cpu_id}{$exit_function}{$latency_usec}
+
+open(FTRACE_REPORT, "$dir/ftrace-report-stdout.txt") || die "Could not open $dir/ftrace-report-stdout.txt";
+open(my $ftrace, '>', "$dir/ftrace.txt") || die "Could not open $dir/ftrace.txt";
+while ($line = <FTRACE_REPORT>) {
+	#                                                       1234567890123
+	#          pmd156-5239  [001] 84267.966306724: function:             call_timer_fn
+
+	chomp $line;
+	if ( $line =~ /\s*(\S+)\s+\[(\d+)\]\s+(\d+\.\d+):\sfunction:(\s+)(.+)/ ) {
+		my $thread = $1;
+		my $cpu = $2;
+		my $timestamp = $3;
+		my $spacing = $4;
+		my $function = $5;
+		#printf("found line:%s\n", $line);
+		if ( $spacing eq "             " ) {
+			#printf("spacing DID match: [%s]\n", $spacing);
+			if ( $cpu_prev_exit_timestamp{$cpu} and $cpu_prev_exit_function{$cpu} ) {
+				my $latency = ($cpu_prev_timestamp{$cpu} - $cpu_prev_exit_timestamp{$cpu});
+				printf $ftrace "%f %d %s %d-%d\n", $latency, $cpu, $cpu_prev_exit_function{$cpu}, $cpu_prev_exit_line_number{$cpu}, $cpu_prev_line_number{$cpu};
+				if ( $cpu_latency_hist{0}{$cpu_prev_exit_function{$cpu}}{$latency} ) {
+					$cpu_latency_hist{0}{$cpu_prev_exit_function{$cpu}}{$latency}++;
+				} else {
+					$cpu_latency_hist{0}{$cpu_prev_exit_function{$cpu}}{$latency} = 1;
+				}
+			}
+			$cpu_prev_exit_timestamp{$cpu} = $timestamp;
+			$cpu_prev_exit_function{$cpu} = $function;
+			$cpu_prev_exit_line_number{$cpu} = $line_number;
+		} # else {
+		#	printf("spacing did not match: [%s]\n", $spacing);
+		#}
+		$cpu_prev_timestamp{$cpu} = $timestamp;
+		$cpu_prev_line_number{$cpu} = $line_number;
+	}
+	$line_number++;
+	#if ($line_number > 200) {
+		#last;
+	#}
+}
+#print Dumper %cpu_latency_hist;
+close FTRACE_REPORT;
+close $ftrace;

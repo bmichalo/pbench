@@ -22,6 +22,7 @@ mode=""
 interval="10"
 iteration="1"
 options="none"
+cpumask="-1" # used for trace-cmd
 case "$script_name" in
 	"sysfs")
 	pattern='*'
@@ -38,7 +39,7 @@ case "$script_name" in
 esac
 
 # Process options and arguments
-opts=$(getopt -q -o idp --longoptions "username:,password:,interface:,packets:,start-delay:,timeout:,devices:,path:,maxdepth:,pattern:,vm:,dir:,group:,iteration:,interval:,start,stop,install,postprocess" -n "getopt.sh" -- "$@");
+opts=$(getopt -q -o idp --longoptions "cpumask:,username:,password:,interface:,packets:,start-delay:,timeout:,devices:,path:,maxdepth:,pattern:,vm:,dir:,group:,iteration:,interval:,start,stop,install,postprocess" -n "getopt.sh" -- "$@");
 if [ $? -ne 0 ]; then
 	printf "\n"
 	printf "$script_name: you specified an invalid option\n\n"
@@ -186,6 +187,13 @@ while true; do
 			shift
 		fi
 		;;
+		--cpumask)
+		shift;
+		if [ -n "$1" ]; then
+			cpumask="$1"
+			shift
+		fi
+		;;
 		--)
 		shift;
 		break;
@@ -217,6 +225,11 @@ case "$tool" in
 	;;
 	blktrace)
 	tool_cmd="blktrace $devices >$tool_stdout_file"
+	;;
+	ftrace)
+	tool_bin=/usr/bin/trace-cmd
+	group=default
+	tool_cmd="$tool_bin record -p function -M $cpumask"
 	;;
 	kvmtrace)
 	tool_bin=/usr/bin/trace-cmd
@@ -363,9 +376,26 @@ case "$mode" in
 	debug_log "stopping $script_name"
 	pid=`cat $tool_pid_file`
 	if [ ! -z "$pid" ] ;then
+		set -x
+		if [ "$tool" == "ftrace" ]; then
+			# change the PID to the child process, which is the actual trace-cmd PID
+			echo "old PID: $pid"
+			pid=`pgrep -P $pid`
+			echo "new PID: $pid"
+			kill -INT $pid
+			sleep 5
+			# wait for the trace-cmd pid to complete
+			while [ -d /proc/$pid ]; do
+				echo "waiting for PID $pid to die"
+				debug_log "waiting for PID $pid to die"
+				kill -INT $pid
+				sleep 5
+			done
+		fi
 		if [ "$tool" == "kvmtrace" ]; then
 			if [ -z "$sleep_cmd" ]; then
 				# kill the perf cmd
+				echo "safe killing $pid"
 				safe_kill $tool $pid INT
 			else
 				# kill the sleep process if it still exists
@@ -376,6 +406,7 @@ case "$mode" in
 			fi
 			# wait for the trace-cmd pid to complete
 			while [ -d /proc/$pid ]; do
+				echo "waiting for PID $pid to die"
 				debug_log "waiting for PID $pid to die"
 				sleep 0.5
 			done
@@ -385,6 +416,7 @@ case "$mode" in
 			rc=$?
 			/bin/rm -f "$tool_pid_file"
 		fi
+		set +x
 	fi
 	;;
 	postprocess)
@@ -403,6 +435,10 @@ case "$mode" in
 		done
 		wait
 		popd >/dev/null
+		;;
+		ftrace)
+		/usr/bin/trace-cmd report >ftrace-report-stdout.txt 2>ftrace-report-stderr.txt
+		$script_path/postprocess/$script_name-postprocess "$tool_output_dir"
 		;;
 		kvmtrace)
 		/usr/bin/trace-cmd report >kvmtrace-report-stdout.txt 2>kvmtrace-report-stderr.txt
